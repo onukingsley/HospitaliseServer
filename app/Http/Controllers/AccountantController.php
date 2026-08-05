@@ -8,6 +8,7 @@ use App\Models\Diagnosis;
 use App\Models\DrugSales;
 use App\Models\LabTest;
 use App\Models\LeaveApplication;
+use App\Models\Patient;
 use App\Models\Payment;
 use App\Models\Rates;
 use App\Models\Reports;
@@ -23,7 +24,7 @@ use Illuminate\Support\Str;
 
 class AccountantController extends Controller
 {
-    public function getAccountantOverview (Request $request){
+   /* public function getAccountantOverview (Request $request){
 
             $req = $request->all();
 
@@ -223,6 +224,689 @@ class AccountantController extends Controller
             }catch (Exception $exception){
                 return response()->json(['message' => $exception->getMessage()]);
             }
+    }*/
+    public function getAccountantOverview (Request $request){
+
+            $req = $request->all();
+
+            try {
+
+                if (isset($req['start_date']) && isset($req['end_date'])){
+
+                    $startDate = Carbon::parse($req['start_date'])->startOfDay();
+                    $endDate = Carbon::parse($req['end_date'])->endOfDay();
+
+                    $accountant = accountant::with(['user.salaryAllowances','user.leaveApplication'])->where('user_id',$request->user()->id)->get();
+
+                    $payments = Payment::whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $drugSales = Sales::with(['pharmasist'])->where('payment_status','paid')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $labTests = LabTest::with(['labScientist'])->where('lab_test_payment_status','paid')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $consultation = AwaitingConsultation::with(['doctor'])->where('payment_status','paid')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $stockRequest = StockRequest::with(['user'])->where('status','approved')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $salary = SalaryAllowances::whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $unitReport = Reports::where('unit', 'accountant')->get();
+
+                    $hospitalRates = Rates::all();
+
+                    //$totalLabTest = LabTest::sum('lab_test_amount');
+                    $totalLabTest = $labTests->sum('lab_test_amount');
+
+                    //$totalDrugSale = LabTest::sum('total_amount');
+                    $totalDrugSale = $drugSales->sum('total_amount');
+
+                    $totalConsultation = $consultation->sum('amount');
+
+                    $totalEnrollment = $payments->where('status','credit')->where('payment_type','enrollment')->sum('amount');
+
+                    $totalSalary = $salary->sum('amount');
+
+                    $drugExpenses = $payments->where('status','debit')->where('payment_type','drugStock');
+                    $labExpenses = $payments->where('status','debit')->where('payment_type','labStock');
+
+
+                    $revenue = $payments->where('status','credit');
+                    $expenses = $payments->where('status','debit');
+
+                    $totalRevenue = $revenue->sum('amount');
+                    $totalExpenses = $expenses->sum('amount');
+
+                    $totalLabExpense = $labExpenses->sum('amount');
+                    $totalDrugExpense = $drugExpenses->sum('amount');
+
+                    $pnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->sum('amount')
+                        ];
+                    });
+
+                    $drugPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','drugSales')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','drugStock')->sum('amount')
+                        ];
+                    });
+
+                    $labPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','labTest')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','labstock')->sum('amount')
+                        ];
+                    });
+
+                    $areaChat = [];
+                    $labAreaChat = [];
+                    $drugAreaChat = [];
+
+                    foreach ($pnl as $item => $value){
+                        $areaChat = [...$areaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($labPnl as $item => $value){
+                        $labAreaChat = [...$labAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($drugPnl as $item => $value){
+                        $drugAreaChat = [...$drugAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+
+                    $departmentalChat = [
+                        ['dept'=> 'consultation' , 'amount' => $totalConsultation],
+                        ['dept'=> 'pharmacy' , 'amount' => $totalDrugSale],
+                        ['dept'=> 'lab test' , 'amount' => $totalLabTest],
+                        ['dept'=> 'Enrollment' , 'amount' => $totalEnrollment],
+                    ];
+
+                    if ($totalRevenue == 0){
+                        $grossMargin = 0;
+                    }else{
+                        $grossMargin = (($totalRevenue - $totalExpenses) / $totalRevenue) * 100;
+
+                    }
+
+                    $netProfit = $totalRevenue - $totalExpenses;
+
+
+                    $all_expenses = $payments->where('status','debit')->groupBy('payment_type')
+                    ->map(function ($items){
+                        return[
+                          'value' =>   $items->sum('amount')
+                        ];
+                    })
+                    ;
+
+                    $expensesChart = [];
+
+                    foreach ($all_expenses as $key => $expense){
+                        $expensesChart = [...$expensesChart, [
+                            'name'=> $key,
+                            'value'=> $expense['value'],
+                        ]];
+                    }
+
+                    $pendingPayments = $payments->where('completion_status','pending')->where('outStanding_balance','>',0);
+
+
+
+
+
+                    $data = [
+                        'payments' => $payments,
+                        'drugSales' => $drugSales,
+                        'labTests' => $labTests,
+                        'consultation' => $consultation,
+                        'stockRequest' => $stockRequest,
+                        'salary' => $salary,
+                        'unitReport' => $unitReport,
+                        'hospitalRates' => $hospitalRates,
+                        'revenue' => $revenue,
+                        'expenses' => $expenses,
+                        'totalRevenue' => $totalRevenue,
+                        'totalExpenses' => $totalExpenses,
+                        'totalLabTest' => $totalLabTest,
+                        'totalDrugSale' => $totalDrugSale,
+                        'totalConsultation' => $totalConsultation,
+                        'totalSalary' => $totalSalary,
+                        'pnlChart' => $areaChat,
+                        'labPnlChart' => $labAreaChat,
+                        'drugPnlChart' => $drugAreaChat,
+                        'deptChart' => $departmentalChat,
+                        'labExpense' => $labExpenses,
+                        'drugExpense' => $drugExpenses,
+                        'totalLabExpense'=> $totalLabExpense,
+                        'totalDrugExpense'=> $totalDrugExpense,
+                        'grossMargin'=> $grossMargin,
+                        'netProfit' => $netProfit,
+                        'expensesChart' => $expensesChart,
+                        'totalEnrollment' => $totalEnrollment,
+                        'pendingPayment' => $pendingPayments
+                    ];
+
+
+
+
+
+                    return response()->json(['message'=>'','data'=> $data],200);
+
+                }else{
+                    $accountant = accountant::with(['user.salaryAllowances','user.leaveApplication'])->where('user_id',$request->user()->id)->get();
+
+                    $payments = Payment::whereMonth('created_at',now()->month)->whereYear('created_at', now()->year)->get();
+
+                    $drugSales = Sales::with(['pharmasist'])->where('payment_status','paid')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $labTests = LabTest::with(['labScientist'])->where('lab_test_payment_status','paid')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $consultation = AwaitingConsultation::with(['doctor'])->where('payment_status','paid')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $stockRequest = StockRequest::with(['user'])->where('status','approved')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $salary = SalaryAllowances::whereYear('created_at', now()->year())->whereMonth('created_at', now()->month)->get();
+
+                    $unitReport = Reports::where('unit', 'accountant')->get();
+
+                    $hospitalRates = Rates::all();
+
+                    //$totalLabTest = LabTest::sum('lab_test_amount');
+                    $totalLabTest = $labTests->sum('lab_test_amount');
+
+                    //$totalDrugSale = LabTest::sum('total_amount');
+                    $totalDrugSale = $drugSales->sum('total_amount');
+
+                    $totalConsultation = $consultation->sum('amount');
+                    $totalEnrollment = $payments->where('status','credit')->where('payment_type','enrollment')->sum('amount');
+
+
+                    $totalSalary = $salary->sum('amount');
+
+
+                    $drugExpenses = $payments->where('status','debit')->where('payment_type','drugStock');
+                    $labExpenses = $payments->where('status','debit')->where('payment_type','labstock');
+
+
+
+                    $revenue = $payments->where('status','credit');
+                    $expenses = $payments->where('status','debit');
+
+                    $totalRevenue = $revenue->sum('amount');
+                    $totalExpenses = $expenses->sum('amount');
+
+                    $totalLabExpense = $labExpenses->sum('amount');
+                    $totalDrugExpense = $drugExpenses->sum('amount');
+
+                    $pnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->sum('amount')
+                        ];
+                    });
+
+                    $drugPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','drugSales')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','drugStock')->sum('amount')
+                        ];
+                    });
+
+                    $labPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','labTest')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','labstock')->sum('amount')
+                        ];
+                    });
+
+                    $areaChat = [];
+                    $labAreaChat = [];
+                    $drugAreaChat = [];
+
+                    foreach ($pnl as $item => $value){
+                        $areaChat = [...$areaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($labPnl as $item => $value){
+                        $labAreaChat = [...$labAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($drugPnl as $item => $value){
+                        $drugAreaChat = [...$drugAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+
+                    $departmentalChat = [
+                        ['dept'=> 'consultation' , 'amount' => $totalConsultation],
+                        ['dept'=> 'pharmacy' , 'amount' => $totalDrugSale],
+                        ['dept'=> 'lab test' , 'amount' => $totalLabTest],
+                        ['dept'=> 'Enrollment' , 'amount' => $totalEnrollment],
+                    ];
+
+
+                    if ($totalRevenue == 0){
+                        $grossMargin = 0;
+                    }else{
+                        $grossMargin = (($totalRevenue - $totalExpenses) / $totalRevenue) * 100;
+
+                    }
+                    $netProfit = $totalRevenue - $totalExpenses;
+
+
+                    $all_expenses = $payments->where('status','debit')->groupBy('payment_type')
+                        ->map(function ($items){
+                            return[
+                                'value' =>   $items->sum('amount')
+                            ];
+                        })
+                    ;
+
+                    $expensesChart = [];
+
+                    foreach ($all_expenses as $key => $expense){
+                        $expensesChart = [...$expensesChart, [
+                            'name'=> $key,
+                            'value'=> $expense['value'],
+                        ]];
+                    }
+
+                    $pendingPayments = $payments->where('completion_status','pending')->where('outStanding_balance','>',0);
+
+
+
+
+                    $data = [
+                        'accountant' => $accountant,
+                        'payments' => $payments,
+                        'drugSales' => $drugSales,
+                        'labTests' => $labTests,
+                        'consultation' => $consultation,
+                        'stockRequest' => $stockRequest,
+                        'salary' => $salary,
+                        'unitReport' => $unitReport,
+                        'hospitalRates' => $hospitalRates,
+                        'revenue' => $revenue,
+                        'expenses' => $expenses,
+                        'totalRevenue' => $totalRevenue,
+                        'totalExpenses' => $totalExpenses,
+                        'totalLabTest' => $totalLabTest,
+                        'totalDrugSale' => $totalDrugSale,
+                        'totalConsultation' => $totalConsultation,
+                        'totalSalary' => $totalSalary,
+                        'pnlChart' => $areaChat,
+                        'labPnlChart' => $labAreaChat,
+                        'drugPnlChart' => $drugAreaChat,
+                        'deptChart' => $departmentalChat,
+                        'labExpense' => $labExpenses,
+                        'drugExpense' => $drugExpenses,
+                        'totalLabExpense'=> $totalLabExpense,
+                        'totalDrugExpense'=> $totalDrugExpense,
+                        'grossMargin'=> $grossMargin,
+                        'netProfit' => $netProfit,
+                        'expensesChart' => $expensesChart,
+                        'totalEnrollment' => $totalEnrollment,
+                        'pendingPayment' => $pendingPayments
+
+                    ];
+
+
+
+
+
+
+
+
+                    return response()->json(['message'=>'','data'=> $data],200);
+                }
+
+
+
+            }catch (Exception $exception){
+                return response()->json(['message' => $exception->getMessage()]);
+            }
+    }
+    public function getPnLChart (Request $request){
+
+            $req = $request->all();
+
+            try {
+
+                if (isset($req['start_date']) && isset($req['end_date'])){
+
+                    $startDate = Carbon::parse($req['start_date'])->startOfDay();
+                    $endDate = Carbon::parse($req['end_date'])->endOfDay();
+
+                    $payments = Payment::whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $drugSales = Sales::with(['pharmasist'])->where('payment_status','paid')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $labTests = LabTest::with(['labScientist'])->where('lab_test_payment_status','paid')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $consultation = AwaitingConsultation::with(['doctor'])->where('payment_status','paid')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $stockRequest = StockRequest::with(['user'])->where('status','approved')->whereBetween('created_at', [$startDate,$endDate])->get();
+
+
+                    $salary = SalaryAllowances::whereBetween('created_at', [$startDate,$endDate])->get();
+
+                    $unitReport = Reports::where('unit', 'accountant')->get();
+
+                    $hospitalRates = Rates::all();
+
+                    //$totalLabTest = LabTest::sum('lab_test_amount');
+                    $totalLabTest = $labTests->sum('lab_test_amount');
+
+                    //$totalDrugSale = LabTest::sum('total_amount');
+                    $totalDrugSale = $drugSales->sum('total_amount');
+
+                    $totalConsultation = $consultation->sum('amount');
+
+                    $totalSalary = $salary->sum('amount');
+
+
+
+                    $drugExpenses = $payments->where([
+                        ['status','debit'],
+                        ['payment_type','drugStock']
+                    ]);
+
+                    $labExpenses = $payments->where([
+                        ['status','debit'],
+                        ['payment_type','labStock']
+                    ]);
+
+                    $revenue = $payments->where('status','credit');
+                    $expenses = $payments->where('status','debit');
+
+                    $totalRevenue = $revenue->sum('amount');
+                    $totalExpenses = $expenses->sum('amount');
+
+                    $totalLabExpense = $labExpenses->sum('amount');
+                    $totalDrugExpense = $drugExpenses->sum('amount');
+
+                    $pnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->sum('amount')
+                        ];
+                    });
+
+                    $drugPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','drugSale')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','drugStock')->sum('amount')
+                        ];
+                    });
+
+                    $labPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','labTest')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','labStock')->sum('amount')
+                        ];
+                    });
+
+                    $areaChat = [];
+                    $labAreaChat = [];
+                    $drugAreaChat = [];
+
+                    foreach ($pnl as $item => $value){
+                        $areaChat = [...$areaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($labPnl as $item => $value){
+                        $labAreaChat = [...$labAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($drugPnl as $item => $value){
+                        $drugAreaChat = [...$drugAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+
+                    $departmentalChat = [
+                        ['dept'=> 'consultation' , 'amount' => $totalConsultation],
+                        ['dept'=> 'pharmacy' , 'amount' => $totalDrugSale],
+                        ['dept'=> 'lab test' , 'amount' => $totalLabTest]
+                    ];
+
+
+                    $data = [
+                        'payments' => $payments,
+                        'drugSales' => $drugSales,
+                        'labTests' => $labTests,
+                        'consultation' => $consultation,
+                        'stockRequest' => $stockRequest,
+                        'salary' => $salary,
+                        'unitReport' => $unitReport,
+                        'hospitalRates' => $hospitalRates,
+                        'revenue' => $revenue,
+                        'expenses' => $expenses,
+                        'totalRevenue' => $totalRevenue,
+                        'totalExpenses' => $totalExpenses,
+                        'totalLabTest' => $totalLabTest,
+                        'totalDrugSale' => $totalDrugSale,
+                        'totalConsultation' => $totalConsultation,
+                        'totalSalary' => $totalSalary,
+                        'pnlChart' => $areaChat,
+                        'labPnlChart' => $labAreaChat,
+                        'drugPnlChart' => $drugAreaChat,
+                        'deptChart' => $departmentalChat,
+                        'labExpense' => $labExpenses,
+                        'drugExpense' => $drugExpenses,
+                        'totalLabExpense'=> $totalLabExpense,
+                        'totalDrugExpense'=> $totalDrugExpense,
+                    ];
+
+
+
+
+
+
+                    return response()->json(['message'=>'','data'=> $data],200);
+
+                }else{
+
+                    $payments = Payment::whereMonth('created_at',now()->month)->whereYear('created_at', now()->year)->get();
+
+                    $drugSales = Sales::with(['pharmasist'])->where('payment_status','paid')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $labTests = LabTest::with(['labScientist'])->where('lab_test_payment_status','paid')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $consultation = AwaitingConsultation::with(['doctor'])->where('payment_status','paid')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $stockRequest = StockRequest::with(['user'])->where('status','approved')->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+
+                    $salary = SalaryAllowances::whereYear('created_at', now()->year())->whereMonth('created_at', now()->month)->get();
+
+                    $unitReport = Reports::where('unit', 'accountant')->get();
+
+                    $hospitalRates = Rates::all();
+
+
+
+                    $drugExpenses = $payments->where([
+                        ['status','debit'],
+                        ['payment_type','drugStock']
+                    ]);
+
+                    $labExpenses = $payments->where([
+                        ['status','debit'],
+                        ['payment_type','labStock']
+                    ]);
+
+
+
+
+
+
+                    $revenue = $payments->where('status','credit');
+                    $expenses = $payments->where('status','debit');
+
+                    $totalRevenue = $revenue->sum('amount');
+                    $totalExpenses = $expenses->sum('amount');
+
+                    $totalLabExpense = $labExpenses->sum('amount');
+                    $totalDrugExpense = $drugExpenses->sum('amount');
+
+                    //$totalLabTest = LabTest::sum('lab_test_amount');
+                    $totalLabTest = $labTests->sum('lab_test_amount');
+
+                    //$totalDrugSale = LabTest::sum('total_amount');
+                    $totalDrugSale = $drugSales->sum('total_amount');
+
+                    $totalConsultation = $consultation->sum('amount');
+
+                    $totalSalary = $salary->sum('amount');
+
+
+
+                    $pnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->sum('amount')
+                        ];
+                    });
+
+                    $drugPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','drugSale')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','drugStock')->sum('amount')
+                        ];
+                    });
+
+                    $labPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                        return $item->created_at->format('d-M');
+                    })->map(function ($items){
+                        return [
+                            'revenue' => $items->where('status','credit')->where('payment_type','labTest')->sum('amount'),
+                            'expenses' => $items->where('status','debit')->where('payment_type','labStock')->sum('amount')
+                        ];
+                    });
+
+                    $areaChat = [];
+                    $labAreaChat = [];
+                    $drugAreaChat = [];
+
+                    foreach ($pnl as $item => $value){
+                        $areaChat = [...$areaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($labPnl as $item => $value){
+                        $labAreaChat = [...$labAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+                    foreach ($drugPnl as $item => $value){
+                        $drugAreaChat = [...$drugAreaChat, [
+                            'date' => $item,
+                            'expenses' => $value['expenses'],
+                            'revenue' => $value['revenue']
+                        ]];
+                    }
+
+                    $departmentalChat = [
+                        ['dept'=> 'consultation' , 'amount' => $totalConsultation],
+                        ['dept'=> 'pharmacy' , 'amount' => $totalDrugSale],
+                        ['dept'=> 'lab test' , 'amount' => $totalLabTest]
+                    ];
+
+
+                    $data = [
+                        'payments' => $payments,
+                        'drugSales' => $drugSales,
+                        'labTests' => $labTests,
+                        'consultation' => $consultation,
+                        'stockRequest' => $stockRequest,
+                        'salary' => $salary,
+                        'unitReport' => $unitReport,
+                        'hospitalRates' => $hospitalRates,
+                        'revenue' => $revenue,
+                        'expenses' => $expenses,
+                        'totalRevenue' => $totalRevenue,
+                        'totalExpenses' => $totalExpenses,
+                        'totalLabTest' => $totalLabTest,
+                        'totalDrugSale' => $totalDrugSale,
+                        'totalConsultation' => $totalConsultation,
+                        'totalSalary' => $totalSalary,
+                        'pnlChart' => $areaChat,
+                        'labPnlChart' => $labAreaChat,
+                        'drugPnlChart' => $drugAreaChat,
+                        'deptChart' => $departmentalChat,
+                         'labExpense' => $labExpenses,
+                        'drugExpense' => $drugExpenses,
+                        'totalLabExpense'=> $totalLabExpense,
+                        'totalDrugExpense'=> $totalDrugExpense,
+                    ];
+
+
+
+
+
+
+                    return response()->json(['message'=>'','data'=> $data],200);
+                }
+
+
+
+            }catch (Exception $exception){
+                return response()->json(['message' => $exception->getMessage()]);
+            }
     }
 
     public function updatePayment (Request $request){
@@ -244,6 +928,45 @@ class AccountantController extends Controller
                 return response()->json(['message' => $exception->getMessage()]);
             }
     }
+    public function updateEnrollmentPayment (Request $request){
+
+            $req = $request->all();
+
+            try {
+
+               return DB::transaction(function () use ($req, $request){
+
+                   $patient = Patient::with(['user'])->where('id',$req['patient_id'])->first();
+
+                   $patient->update([
+                       'enrollment_status'=> 'completed'
+                   ]);
+
+                   $paymentPayload  = [
+                       'patient_user_id' => $patient['user']['id'],
+                       'signed_accountant_id' => $request->user()->id,
+                       'payment_type' => 'enrollment',
+                       'title' => "patient Enrollment". $patient['user']['name'],
+                       'invoice_id' => 'Reg'.Str::random(7),
+                       'amount' => $req['amount'],
+                       'rates_id' => $req['rates_id'],
+                       'status' => 'credit'
+                   ];
+
+
+                   $payment = Payment::create($paymentPayload);
+
+
+                   return response()->json(['message'=>'Payment has been Settled Completely','data'=> $patient],200);
+
+
+               });
+
+
+            }catch (Exception $exception){
+                return response()->json(['message' => $exception->getMessage()]);
+            }
+    }
 
 
         /*this function is called after the user makes payment*/
@@ -260,7 +983,7 @@ class AccountantController extends Controller
 
 
                         if ($sales->payment_status === 'paid') {
-                            return response()->json(['message' => 'Prescription already paid'], 400);
+                            return response()->json(['message' => 'Prescription already paid'], 200);
                         }
 
                         $paymentPayload  = [
@@ -317,13 +1040,13 @@ class AccountantController extends Controller
                             $labTest = LabTest::with(['rates'])->where('id',$req['labTest_id'])->lockForUpdate()->first();
 
                           if ($labTest->lab_test_payment_status === 'paid') {
-                              return response()->json(['message' => 'Lab test already paid'], 400);
+                              return response()->json(['message' => 'Lab test already paid'], 200);
                           }
 
                             $paymentEntry = Payment::create([
                                 'patient_user_id' => $req['patientUser_id'],
                                 'signed_accountant_id' => $request->user()->id,
-                                'payment_type' => 'labTests',
+                                'payment_type' => 'labTest',
                                 'title' => $req['title'],
                                 'invoice_id' => 'Drg'.Str::random(7),
                                 'amount' => $labTest->lab_test_amount,
@@ -429,8 +1152,9 @@ class AccountantController extends Controller
                 $consultation = AwaitingConsultation::where('id',$req['consultation_id'])->lockForUpdate()->first();
 
                 if ($consultation->payment_status === 'paid') {
-                    return response()->json(['message' => 'Consultation already paid'], 400);
+                    return response()->json(['message' => 'Consultation already paid'], 200);
                 }
+
 
                 $paymentEntry = Payment::create([
                     'patient_user_id' => $req['patientUser_id'],
@@ -826,6 +1550,79 @@ class AccountantController extends Controller
                     ,$req['details'])->first();
 
                 return response()->json(['message'=>'Unsettled Transaction has been fetched Successfully','data'=> $patientUser],200);
+
+            }catch (Exception $exception){
+                return response()->json(['message' => $exception->getMessage()]);
+            }
+    }
+    public function getPatientEnrollment (Request $request){
+
+            $req = $request->all();
+
+            try {
+
+                $patientUser = User::with(['patient' => function($q){
+                    $q->where('enrollment_status','pending');
+                }])->whereAny(
+                    [
+                        'regID',
+                        'email',
+                        'phone_no'
+                    ]
+                    ,$req['details'])->first();
+
+                if (!$patientUser?->patient || $patientUser['patient'] == null){
+                    return response()->json(['message'=>'No Unsettled Enrollment Payment found'],200);
+
+                }
+                $rate = Rates::where('title','patient enrollment')->first();
+
+                return response()->json(['message'=>'Unsettled Enrollment has been fetched Successfully','data'=> ['patient'=>$patientUser, 'rate'=> $rate ]],200);
+
+            }catch (Exception $exception){
+                return response()->json(['message' => $exception->getMessage()]);
+            }
+    }
+
+    public function updatePatientEnrollment (Request $request){
+
+            $req = $request->all();
+
+            try {
+                return DB::transaction(function () use($req, $request){
+                    $patient = Patient::with(['user'])->where('id',$req['patient_id'])->first();
+
+                    if (!$patient){
+                        return response()->json(['message'=>'No Patient Record Found'],200);
+                    }
+
+                    $paymentPayload  = [
+                        'patient_user_id' => $patient->user->id,
+                        'signed_accountant_id' => $request->user()->id,
+                        'payment_type' => 'enrollment',
+                        'title' => "patient Enrollment".$patient->user->name,
+                        'invoice_id' => 'Reg'.Str::random(7),
+                        'amount' => $req['amount'],
+                        'rates_id' => $req['rates_id'],
+                        'status' => 'credit'
+                    ];
+
+
+                    $payment = Payment::create($paymentPayload);
+
+                    $patient->update([
+                        'enrollment_status' => 'completed'
+                    ]);
+                    $patient->refresh();
+
+
+
+                    return response()->json(['message'=>'Patient Enrollment has been completed','data'=> ['payment'=>$payment, 'patient'=>$patient]],200);
+
+
+                });
+
+
 
             }catch (Exception $exception){
                 return response()->json(['message' => $exception->getMessage()]);

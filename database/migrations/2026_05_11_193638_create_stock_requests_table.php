@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('drug_stock_id')->nullable()->constrained();
             $table->foreignId('user_id')->constrained();
             $table->foreignId('lab_stock_id')->nullable()->constrained();
+            $table->foreignId('payment_id]')->nullable()->constrained();
             $table->string('quantity');
             $table->string('unit_price')->nullable();
             $table->string('title');

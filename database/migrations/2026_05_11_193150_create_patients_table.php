@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('blood_group');
             $table->string('genotype');
             $table->string('allergies')->nullable();
+            $table->string('enrollment_status')->default('pending');
             $table->string('nos_name')->nullable();
             $table->string('nos_address')->nullable();
             $table->string('nos_phone_no')->nullable();

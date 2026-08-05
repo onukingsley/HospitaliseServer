@@ -275,6 +275,7 @@ class DatabaseSeeder extends Seeder
             ['title' => 'Blood Test - Complete', 'amount' => '8000','rate_type'=>'labTest'],
             ['title' => 'Blood Test - Basic', 'amount' => '4000','rate_type'=>'labTest'],
             ['title' => 'X-Ray', 'amount' => '12000','rate_type'=>'labTest'],
+            ['title' => 'patient enrollment', 'amount' => '11500','rate_type'=>'enrollment'],
             ['title' => 'MRI Scan', 'amount' => '50000','rate_type'=>'labTest'],
             ['title' => 'CT Scan', 'amount' => '35000','rate_type'=>'labTest'],
         ];
@@ -481,7 +482,7 @@ class DatabaseSeeder extends Seeder
 
         // ========== PAYMENTS TABLE ==========
         $payments = [];
-        $paymentTypes = ['consultation', 'drugSales', 'labTest', 'enrollment'];
+        $paymentTypes = ['consultation', 'drugSales', 'labTest', 'enrollment','labstock','drugStock'];
         $paymentStatuses = ['credit', 'debit'];
 
         for ($i = 0; $i < 200; $i++) {
@@ -600,7 +601,7 @@ class DatabaseSeeder extends Seeder
 
         // ========== STOCK REQUESTS TABLE ==========
         $stockRequests = [];
-        $requestStatuses = ['pendingApproval', 'approved', 'rejected'];
+        $requestStatuses = ['pending', 'approved', 'rejected'];
         $requestTypes = ['drug_stock_id', 'lab_stock_id'];
 
         for ($i = 0; $i < 50; $i++) {
@@ -610,6 +611,7 @@ class DatabaseSeeder extends Seeder
                 'user_id' => $pharmaUserIds->random(),
                 'lab_stock_id' => $type === 'lab_stock_id' ? $labStockIds->random() : null,
                 'quantity' => (string) rand(50, 1000),
+/*                'payment_id' => (string) rand(1, 100),*/
                 'unit_price' => (string) rand(100, 5000),
                 'title' => 'Stock request for ' . $this->generateName('product', $i),
                 'status' => $requestStatuses[array_rand($requestStatuses)],

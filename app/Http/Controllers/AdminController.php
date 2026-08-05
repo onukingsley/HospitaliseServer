@@ -34,6 +34,17 @@ class AdminController extends Controller
         $req = $request->all();
 
         try {
+            $totalUser = User::count();
+            $totalDoctors = Doctor::count();
+            // todo total nurses, clerk, lab attendant, accountant, pharmasist, patitent
+            $totalNurses = Nurses::count();
+            $totalClerk = Clerk::count();
+            $totalPharmasist = Pharmasist::count();
+            $totalLabScientist = LabScientist::count();
+            $totalPatient = Patient::count();
+            $totalAccountant = Accountant::count();
+
+
             $allUsers = User::paginate(50);
             $allDoctors = Doctor::with(['user'])->paginate(50);
             $allAccountant = accountant::with(['user'])->paginate(50);
@@ -101,6 +112,120 @@ class AdminController extends Controller
                 $totalExpenses = $expenses->sum('amount');
 
 
+
+
+
+                $totalSalary = $salary->sum('amount');
+
+                $totalLabTest = $labTests->sum('lab_test_amount');
+
+                //$totalDrugSale = LabTest::sum('total_amount');
+                $totalDrugSale = $drugSales->sum('total_amount');
+
+                $totalConsultation = $consultation->sum('amount');
+                $totalEnrollment = $payments->where('status','credit')->where('payment_type','enrollment')->sum('amount');
+
+                $drugExpenses = $payments->where('status','debit')->where('payment_type','drugStock');
+                $labExpenses = $payments->where('status','debit')->where('payment_type','labstock');
+
+
+                $totalLabExpense = $labExpenses->sum('amount');
+                $totalDrugExpense = $drugExpenses->sum('amount');
+
+                $pnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                    return $item->created_at->format('d-M');
+                })->map(function ($items){
+                    return [
+                        'revenue' => $items->where('status','credit')->sum('amount'),
+                        'expenses' => $items->where('status','debit')->sum('amount')
+                    ];
+                });
+
+                $drugPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                    return $item->created_at->format('d-M');
+                })->map(function ($items){
+                    return [
+                        'revenue' => $items->where('status','credit')->where('payment_type','drugSales')->sum('amount'),
+                        'expenses' => $items->where('status','debit')->where('payment_type','drugStock')->sum('amount')
+                    ];
+                });
+
+                $labPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                    return $item->created_at->format('d-M');
+                })->map(function ($items){
+                    return [
+                        'revenue' => $items->where('status','credit')->where('payment_type','labTest')->sum('amount'),
+                        'expenses' => $items->where('status','debit')->where('payment_type','labstock')->sum('amount')
+                    ];
+                });
+
+                $areaChat = [];
+                $labAreaChat = [];
+                $drugAreaChat = [];
+
+                foreach ($pnl as $item => $value){
+                    $areaChat = [...$areaChat, [
+                        'date' => $item,
+                        'expenses' => $value['expenses'],
+                        'revenue' => $value['revenue']
+                    ]];
+                }
+                foreach ($labPnl as $item => $value){
+                    $labAreaChat = [...$labAreaChat, [
+                        'date' => $item,
+                        'expenses' => $value['expenses'],
+                        'revenue' => $value['revenue']
+                    ]];
+                }
+                foreach ($drugPnl as $item => $value){
+                    $drugAreaChat = [...$drugAreaChat, [
+                        'date' => $item,
+                        'expenses' => $value['expenses'],
+                        'revenue' => $value['revenue']
+                    ]];
+                }
+
+                $departmentalChat = [
+                    ['dept'=> 'consultation' , 'amount' => $totalConsultation],
+                    ['dept'=> 'pharmacy' , 'amount' => $totalDrugSale],
+                    ['dept'=> 'lab test' , 'amount' => $totalLabTest],
+                    ['dept'=> 'Enrollment' , 'amount' => $totalEnrollment],
+                ];
+
+
+                if ($totalRevenue == 0){
+                    $grossMargin = 0;
+                }else{
+                    $grossMargin = (($totalRevenue - $totalExpenses) / $totalRevenue) * 100;
+
+                }
+                $netProfit = $totalRevenue - $totalExpenses;
+
+
+                $all_expenses = $payments->where('status','debit')->groupBy('payment_type')
+                    ->map(function ($items){
+                        return[
+                            'value' =>   $items->sum('amount')
+                        ];
+                    })
+                ;
+
+                $expensesChart = [];
+
+                foreach ($all_expenses as $key => $expense){
+                    $expensesChart = [...$expensesChart, [
+                        'name'=> $key,
+                        'value'=> $expense['value'],
+                    ]];
+                }
+
+                $pendingPayments = $payments->where('completion_status','pending')->where('outStanding_balance','>',0);
+
+
+
+
+
+
                 $data = [
                     'users' => $allUsers,
                     'doctors' => $allDoctors,
@@ -164,6 +289,36 @@ class AdminController extends Controller
                     'paidLabTests' => $labTests->where('lab_test_payment_status','paid'),
                     'unpaidLabTests' => $labTests->where('lab_test_payment_status','unpaid'),
                     'unpaidLabTestsCount' => $labTests->where('lab_test_payment_status','unpaid')->count(),
+
+
+                    'totalConsultation' => $totalConsultation,
+                    'labPnlChart' => $labAreaChat,
+                    'drugPnlChart' => $drugAreaChat,
+                    'labExpense' => $labExpenses,
+                    'drugExpense' => $drugExpenses,
+                    'deptChart' => $departmentalChat,
+                    'totalLabExpense'=> $totalLabExpense,
+                    'totalDrugExpense'=> $totalDrugExpense,
+                    'grossMargin'=> $grossMargin,
+                    'netProfit' => $netProfit,
+                    'expensesChart' => $expensesChart,
+                    'totalEnrollment' => $totalEnrollment,
+                    'pendingPayment' => $pendingPayments,
+                    'totalLabTest' => $totalLabTest,
+                    'totalDrugSale' => $totalDrugSale,
+                    'totalSalary' => $totalSalary,
+
+
+                    'totalDoctor' => $totalDoctors,
+                    'totalNurses' => $totalNurses,
+                    'totalLabScientist' => $totalLabScientist,
+                    'totalPharmasist' => $totalPharmasist,
+                    'totalClerk' => $totalClerk,
+                    'totalPatient' => $totalPatient,
+                    'totalAccountant' => $totalAccountant,
+
+
+
                 ];
 
 
@@ -192,6 +347,116 @@ class AdminController extends Controller
 
                 $totalRevenue = $revenue->sum('amount');
                 $totalExpenses = $expenses->sum('amount');
+
+
+                $totalSalary = $salary->sum('amount');
+
+                $totalLabTest = $labTests->sum('lab_test_amount');
+
+                //$totalDrugSale = LabTest::sum('total_amount');
+                $totalDrugSale = $drugSales->sum('total_amount');
+
+                $totalConsultation = $consultation->sum('amount');
+                $totalEnrollment = $payments->where('status','credit')->where('payment_type','enrollment')->sum('amount');
+
+                $drugExpenses = $payments->where('status','debit')->where('payment_type','drugStock');
+                $labExpenses = $payments->where('status','debit')->where('payment_type','labstock');
+
+
+                $totalLabExpense = $labExpenses->sum('amount');
+                $totalDrugExpense = $drugExpenses->sum('amount');
+
+                $pnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                    return $item->created_at->format('d-M');
+                })->map(function ($items){
+                    return [
+                        'revenue' => $items->where('status','credit')->sum('amount'),
+                        'expenses' => $items->where('status','debit')->sum('amount')
+                    ];
+                });
+
+                $drugPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                    return $item->created_at->format('d-M');
+                })->map(function ($items){
+                    return [
+                        'revenue' => $items->where('status','credit')->where('payment_type','drugSales')->sum('amount'),
+                        'expenses' => $items->where('status','debit')->where('payment_type','drugStock')->sum('amount')
+                    ];
+                });
+
+                $labPnl = $payments->sortBy('created_at')->groupBy(function ($item){
+                    return $item->created_at->format('d-M');
+                })->map(function ($items){
+                    return [
+                        'revenue' => $items->where('status','credit')->where('payment_type','labTest')->sum('amount'),
+                        'expenses' => $items->where('status','debit')->where('payment_type','labstock')->sum('amount')
+                    ];
+                });
+
+                $areaChat = [];
+                $labAreaChat = [];
+                $drugAreaChat = [];
+
+                foreach ($pnl as $item => $value){
+                    $areaChat = [...$areaChat, [
+                        'date' => $item,
+                        'expenses' => $value['expenses'],
+                        'revenue' => $value['revenue']
+                    ]];
+                }
+                foreach ($labPnl as $item => $value){
+                    $labAreaChat = [...$labAreaChat, [
+                        'date' => $item,
+                        'expenses' => $value['expenses'],
+                        'revenue' => $value['revenue']
+                    ]];
+                }
+                foreach ($drugPnl as $item => $value){
+                    $drugAreaChat = [...$drugAreaChat, [
+                        'date' => $item,
+                        'expenses' => $value['expenses'],
+                        'revenue' => $value['revenue']
+                    ]];
+                }
+
+                $departmentalChat = [
+                    ['dept'=> 'consultation' , 'amount' => $totalConsultation],
+                    ['dept'=> 'pharmacy' , 'amount' => $totalDrugSale],
+                    ['dept'=> 'lab test' , 'amount' => $totalLabTest],
+                    ['dept'=> 'Enrollment' , 'amount' => $totalEnrollment],
+                ];
+
+
+                if ($totalRevenue == 0){
+                    $grossMargin = 0;
+                }else{
+                    $grossMargin = (($totalRevenue - $totalExpenses) / $totalRevenue) * 100;
+
+                }
+                $netProfit = $totalRevenue - $totalExpenses;
+
+
+                $all_expenses = $payments->where('status','debit')->groupBy('payment_type')
+                    ->map(function ($items){
+                        return[
+                            'value' =>   $items->sum('amount')
+                        ];
+                    })
+                ;
+
+                $expensesChart = [];
+
+                foreach ($all_expenses as $key => $expense){
+                    $expensesChart = [...$expensesChart, [
+                        'name'=> $key,
+                        'value'=> $expense['value'],
+                    ]];
+                }
+
+                $pendingPayments = $payments->where('completion_status','pending')->where('outStanding_balance','>',0);
+
+
+
 
 
 
@@ -223,7 +488,6 @@ class AdminController extends Controller
                     'totalRevenue' => $totalRevenue,
                     'totalExpenses' => $totalExpenses,
 
-
                     'salaryAllowance' => $salaryAllowances,
 
 
@@ -233,10 +497,10 @@ class AdminController extends Controller
                     'approvedLeaveApplication' => $leaveApplication->where('status', 'approved'),
 
                     'approvedStockRequest' => $stockRequest->where('status','approved'),
-                    'PendingStockRequest' => $stockRequest->where('status','pending'),
+                    'pendingStockRequest' => $stockRequest->where('status','pending'),
 
                     'approvedLabStock' => $labStock->where('status','approved'),
-                    'PendingLabStock' => $labStock->where('status','pending'),
+                    'pendingLabStock' => $labStock->where('status','pending'),
 
                     'approvedDrugStock' => $stockRequest->where('status','approved'),
                     'pendingDrugStock' => $stockRequest->where('status','pending'),
@@ -259,8 +523,34 @@ class AdminController extends Controller
                     'paidLabTests' => $labTests->where('lab_test_payment_status','paid'),
                     'unpaidLabTests' => $labTests->where('lab_test_payment_status','unpaid'),
                     'unpaidLabTestsCount' => $labTests->where('lab_test_payment_status','unpaid')->count(),
-                ];
 
+
+                    'totalConsultation' => $totalConsultation,
+                    'labPnlChart' => $labAreaChat,
+                    'drugPnlChart' => $drugAreaChat,
+                    'labExpense' => $labExpenses,
+                    'drugExpense' => $drugExpenses,
+                    'deptChart' => $departmentalChat,
+                    'totalLabExpense'=> $totalLabExpense,
+                    'totalDrugExpense'=> $totalDrugExpense,
+                    'grossMargin'=> $grossMargin,
+                    'netProfit' => $netProfit,
+                    'expensesChart' => $expensesChart,
+                    'totalEnrollment' => $totalEnrollment,
+                    'pendingPayment' => $pendingPayments,
+                    'totalLabTest' => $totalLabTest,
+                    'totalDrugSale' => $totalDrugSale,
+                    'totalSalary' => $totalSalary,
+                    'totalDoctor' => $totalDoctors,
+                    'totalNurses' => $totalNurses,
+                    'totalLabScientist' => $totalLabScientist,
+                    'totalPharmasist' => $totalPharmasist,
+                    'totalClerk' => $totalClerk,
+                    'totalPatient' => $totalPatient,
+                    'totalAccountant' => $totalAccountant,
+
+
+                ];
 
 
 

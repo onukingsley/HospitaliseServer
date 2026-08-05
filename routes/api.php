@@ -34,6 +34,8 @@ Route::post('/updateUnitReport', [UserController::class, 'updateUnitReport'])->m
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/adminRegister', [AuthController::class, 'register']);
 Route::post('/registerPatient', [ClerkController::class, 'createPatient'])->middleware('auth:sanctum');
+Route::post('/generateQrToken', [ClerkController::class, 'generateTokenUrl'])->middleware('auth:sanctum');
+Route::post('/QrPatientEnroll', [ClerkController::class, 'patientQrRegistration']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
 
@@ -98,6 +100,7 @@ Route::get('/generateInvoice', [AccountantController::class, 'generateInvoice'])
 Route::get('/getGeneratedBill', [AccountantController::class, 'getGeneratedBill'])->middleware('auth:sanctum');
 Route::get('/paymentInvoice', [AccountantController::class, 'getPaymentInvoice'])->middleware('auth:sanctum');
 Route::get('/getUnsettledPayment', [AccountantController::class, 'getUnSettledPayment'])->middleware('auth:sanctum');
+Route::get('/getPatientEnrollment', [AccountantController::class, 'getPatientEnrollment'])->middleware('auth:sanctum');
 Route::get('/getPeriodicalPayment', [AccountantController::class, 'getPeriodicalPayment'])->middleware('auth:sanctum');
 Route::get('/getPeriodicalDrugSales', [AccountantController::class, 'getPeriodicalDrugSales'])->middleware('auth:sanctum');
 Route::get('/getPeriodicalLabtest', [AccountantController::class, 'getPeriodicalLabtest'])->middleware('auth:sanctum');
@@ -107,6 +110,7 @@ Route::get('/getPeriodicalSalary', [AccountantController::class, 'getPeriodicalS
 
 Route::post('/updateDrugSales', [AccountantController::class, 'updateDrugSales'])->middleware('auth:sanctum');
 Route::post('/settlePayment', [AccountantController::class, 'updatePayment'])->middleware('auth:sanctum');
+Route::post('/enrollmentPayment', [AccountantController::class, 'updatePatientEnrollment'])->middleware('auth:sanctum');
 Route::post('/updateLabPayment', [AccountantController::class, 'updateLabPayment'])->middleware('auth:sanctum');
 Route::post('/updateConsultation', [AccountantController::class, 'updateConsultation'])->middleware('auth:sanctum');
 

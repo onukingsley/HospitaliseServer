@@ -29,6 +29,10 @@ class Payment extends Model
     public function consultation(){
         return $this->hasMany(AwaitingConsultation::class);
     }
+
+    public function requestStock(){
+        return $this->hasMany(StockRequest::class);
+    }
     public function signedAccountant(){
         return $this->belongsTo(User::class, 'signed_accountant_id');
     }

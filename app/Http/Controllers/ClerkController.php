@@ -7,10 +7,12 @@ use App\Models\Clerk;
 use App\Models\Diagnosis;
 use App\Models\Patient;
 use App\Models\Payment;
+use App\Models\QRToken;
 use App\Models\Rates;
 use App\Models\Reports;
 use App\Models\User;
 use Exception;
+use Faker\Core\Uuid;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -208,5 +210,122 @@ class ClerkController extends Controller
            }catch (Exception $exception){
                return response()->json(['message' => $exception->getMessage()]);
            }
+   }
+
+   public function generateTokenUrl (Request $request){
+
+           $req = $request->all();
+
+           try {
+
+               $payload = [
+                 'token' => Str::random(4),
+                 'expired_at' => now()->addMinutes(10)
+               ];
+
+               $token = QRToken::create($payload);
+
+               $url = env('FRONT_END_URL')."/qrEnrollment/$token->token";
+               //$url = "/qrEnrollment/$token->token";
+
+               return response()->json(['message'=>'','data'=> ['url' => $url, 'token'=>$token]],200);
+
+           }catch (Exception $exception){
+               return response()->json(['message' => $exception->getMessage()]);
+           }
+   }
+
+   public function patientQrRegistration (Request $request){
+
+           $req = $request->all();
+
+       try {
+
+           return DB::transaction(function () use($req, $request){
+
+               $isToken = QRToken::where('token', $req['token'])->first();
+
+               if (!$isToken){
+                   return response()->json(['message'=>'Invalid QrToken or URL.'],200);
+               }
+               if ($isToken->isExpired()){
+                   $isToken->update([
+                      'status' => 'expired'
+                   ]);
+                   return response()->json(['message'=>'Token has Expired Please meet the Clerk'],200);
+               }
+
+
+
+
+               $payload = [
+                   'name' => $req['name'],
+                   'email' => $req['email'],
+                   'password' => Hash::make( isset($req['password']) ? $req['password'] : 'password'),
+                   'user_role' => 'patient',
+                   'regID' => 'PID'.$req['token'],
+                   'phone_no' => $req['phone_no'],
+                   'address' => $req['address'],
+                   'gender' => $req['gender'],
+                   'date_of_birth' => $req['dateOfBirth']
+
+
+               ];
+
+               if ($request->hasFile('image')){
+                   $image = $request->file('image')->store('userImage','public');
+
+                   $payload['profile_image'] = $image;
+
+               }
+
+               $user = User::create($payload);
+
+               if (!$user) {
+                   throw new \Exception('Failed to create user');
+               }
+
+               if ($user){
+                   $patientPayload = [
+                       'user_id' => $user->id,
+                       'blood_group' => $req['blood_group'],
+                       'genotype' => $req['genotype'],
+                       'nos_name' => $req['nos_name'],
+                       'nos_address' => $req['nos_address'],
+                       'nos_phone_no' => $req['nos_phone_no'],
+                       'insurance_id' => $req['insurance_id'],
+                       'insurance_provider' => $req['insurance_provider'],
+
+                   ];
+                   if (isset($req['allergies'])){
+                       $patientPayload['allergies'] = $req['allergies'];
+                   }
+                   $patient = Patient::create($patientPayload);
+               }
+
+               //todo move the payment creation to the account endpoint patientEnrollment
+
+             /*  $paymentPayload  = [
+                   'patient_user_id' => $user->id,
+                   'signed_accountant_id' => $request->user()->id,
+                   'payment_type' => 'enrollment',
+                   'title' => "patient Enrollment $user->name",
+                   'invoice_id' => 'Reg'.Str::random(7),
+                   'amount' => $req['amount'],
+                   'rates_id' => $req['rates_id'],
+                   'status' => 'credit'
+               ];
+
+
+               $payment = Payment::create($paymentPayload);
+*/
+
+               return response()->json(['message'=>"Your Registration is Successful. RegID: $user->regID ",'data'=> ['user'=> $user,'patient'=> $patient]],200);
+
+           });
+
+       }catch (Exception $exception){
+           return response()->json(['message' => $exception->getMessage()]);
+       }
    }
 }
