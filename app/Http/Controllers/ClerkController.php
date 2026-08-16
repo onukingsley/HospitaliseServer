@@ -183,12 +183,16 @@ class ClerkController extends Controller
                            'nos_phone_no' => $req['nos_phone_no'],
                            'insurance_id' => $req['insurance_id'],
                            'insurance_provider' => $req['insurance_provider'],
-                           'allergies' => $req['allergies'],
+
                        ];
+
+                       if (isset($req['allergies'])){
+                           $patientPayload['allergies'] = $req['allergies'];
+                       }
                        $patient = Patient::create($patientPayload);
                    }
 
-                   $paymentPayload  = [
+                 /*  $paymentPayload  = [
                        'patient_user_id' => $user->id,
                        'signed_accountant_id' => $request->user()->id,
                        'payment_type' => 'enrollment',
@@ -200,10 +204,10 @@ class ClerkController extends Controller
                    ];
 
 
-                   $payment = Payment::create($paymentPayload);
+                   $payment = Payment::create($paymentPayload);*/
 
 
-                   return response()->json(['message'=>'','data'=> ['user'=> $user,'patient'=> $patient, 'payment' => $payment]],200);
+                   return response()->json(['message'=>'Patient Created Successfully','data'=> ['user'=> $user,'patient'=> $patient]],200);
 
                });
 

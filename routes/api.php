@@ -140,12 +140,14 @@ Route::get('/getAdminPeriodicalSalary', [AdminController::class, 'getPeriodicalS
 
 Route::post('/updateLeaveApplication', [AdminController::class, 'updateLeaveApplication'])->middleware('auth:sanctum');
 Route::post('/updateDrugStock', [AdminController::class, 'updateDrugStock'])->middleware('auth:sanctum');
+Route::post('/approveDrugStock', [AdminController::class, 'approveDrugStock'])->middleware('auth:sanctum');
 Route::post('/addAdminDrugStock', [AdminController::class, 'addAdminDrugStock'])->middleware('auth:sanctum');
 Route::post('/updateLabStock', [AdminController::class, 'updateLabStock'])->middleware('auth:sanctum');
 Route::post('/addAdminLabStock', [AdminController::class, 'addAdminLabStock'])->middleware('auth:sanctum');
 Route::post('/updateRestockRequest', [AdminController::class, 'updateRestockRequest'])->middleware('auth:sanctum');
 // Admin UserManagement endpoint
 Route::post('/updateUser', [AdminController::class, 'updateUser'])->middleware('auth:sanctum');
+Route::post('/updateSuspension', [AdminController::class, 'updateSuspension'])->middleware('auth:sanctum');
 Route::post('/deleteUser', [AdminController::class, 'deleteUser'])->middleware('auth:sanctum');
 
 

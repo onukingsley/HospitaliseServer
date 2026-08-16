@@ -58,8 +58,8 @@ class AuthController extends Controller
           'pharmasist'  => 'PHID',
           'labScientist'  => 'LID',
           'clerk'  => 'CID',
-          'Accountant'  => 'AID',
-          'Nurse'  => 'NID',
+          'accountant'  => 'AID',
+          'nurse'  => 'NID',
         ];
 
         $payload = [
@@ -68,7 +68,11 @@ class AuthController extends Controller
             'password' => Hash::make( $req['password']),
             'user_role' => $req['user_role'],
             'regID' => $idPrefix[$req['user_role']].Str::random(4),
-            'phone_no'=> $req['phone_no']
+            'phone_no'=> $req['phone_no'],
+            'address' => $req['address'],
+            'gender' => $req['gender'],
+            'date_of_birth' => $req['dateOfBirth']
+
 
 
         ];
@@ -118,7 +122,7 @@ class AuthController extends Controller
                             'license_id' => $req['license_id'],
                             'level' => $req['level'],
                             'leave_days' => $req['leave_days'],
-                            'specialization' => $req['department'],
+                            'department' => $req['department'],
                         ];
                         $attach = Nurses::create($nursePayload);
                         break;

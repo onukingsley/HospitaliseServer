@@ -13,12 +13,12 @@ return new class extends Migration
     {
         Schema::create('diagnoses', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('patient_id')->constrained();
-            $table->foreignId('doctor_id')->constrained();
-            $table->string('description');
+            $table->foreignId('patient_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('doctor_id')->nullable()->constrained()->nullOnDelete();
+            $table->text('description');
             $table->string('body_vitals');
             $table->string('ward_status')->default('outPatient'); //inPatient,outPatient
-            $table->string('patients_complain');
+            $table->text('patients_complain');
             $table->string('initial_diagnosis')->nullable();
             $table->string('final_diagnosis')->nullable();
             $table->timestamps();

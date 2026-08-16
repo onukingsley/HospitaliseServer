@@ -44,15 +44,30 @@ class AdminController extends Controller
             $totalPatient = Patient::count();
             $totalAccountant = Accountant::count();
 
+            $outPatient = User::with(['patient',
+                'patient.diagnosis'=> function($q){
+                    $q->where('ward_status','outPatient');
+                }
+            ])->whereHas('patient.diagnosis',function ($q){
+                $q->where('ward_status', 'outPatient');
+            })->get();
+            $inPatient = User::with(['patient',
+                'patient.diagnosis'=> function($q){
+                    $q->where('ward_status','inPatient');
+                }
+            ])->whereHas('patient.diagnosis',function ($q){
+                $q->where('ward_status', 'inPatient');
+            })->get();
 
             $allUsers = User::paginate(50);
-            $allDoctors = Doctor::with(['user'])->paginate(50);
+            /*$allDoctors = Doctor::with(['user'])->paginate(50);
             $allAccountant = accountant::with(['user'])->paginate(50);
             $allPharmasist = Pharmasist::with(['user'])->paginate(50);
             $allLabAttendant = LabScientist::with(['user'])->paginate(50);
             $allClerk = Clerk::with(['user'])->paginate(50);
-            $allNurses = Nurses::with(['user'])->paginate(50);
+            $allNurses = Nurses::with(['user'])->paginate(50);*/
             $allPatients = Patient::with(['user'])->paginate(50);
+
 
             /*$allStaff = User::with(['doctor','clerk','nurse','accountant','pharmasist','labScientist'])->where(
                 function ($query) {
@@ -68,6 +83,19 @@ class AdminController extends Controller
             $allStaff = User::with(['doctor','clerk','nurse','accountant','pharmasist','labScientist'])->whereIn('user_role',[
                 'doctor','clerk','nurse','accountant','pharmasist','labScientist'
             ])->get();
+
+            /*todo all user roles should extend from all staff*/
+
+
+            $allDoctors = $allStaff->where('user_role','doctor');
+            $allAccountant =  $allStaff->where('user_role','accountant');
+            $allPharmasist =  $allStaff->where('user_role','pharmasist');
+            $allLabAttendant =  $allStaff->where('user_role','labScientist');
+            $allClerk =  $allStaff->where('user_role','clerk');
+            $allNurses =  $allStaff->where('user_role','nurse');
+
+
+
 
             $salaryAllowances  = SalaryAllowances::latest()->get();
             $leaveApplication = LeaveApplication::all();
@@ -98,7 +126,7 @@ class AdminController extends Controller
 
                 $consultation = AwaitingConsultation::with(['doctor'])->whereBetween('created_at', [$startDate,$endDate])->get();
 
-                $stockRequest = StockRequest::with(['user'])->whereBetween('created_at', [$startDate,$endDate])->get();
+                $stockRequest = StockRequest::with(['user','drugStock','labStock'])->whereBetween('created_at', [$startDate,$endDate])->get();
 
                 $salary = SalaryAllowances::whereBetween('created_at', [$startDate,$endDate])->get();
 
@@ -262,18 +290,27 @@ class AdminController extends Controller
                     'deniedLeaveApplication' => $leaveApplication->where('status', 'denied'),
                     'approvedLeaveApplication' => $leaveApplication->where('status', 'approved'),
 
-                    'approvedStockRequest' => $stockRequest->where('status','approved'),
-                    'pendingStockRequest' => $stockRequest->where('status','pending'),
+                    'approvedDrugStockRequest' => $stockRequest->where('status','approved')->where('drug_stock_id','!=' , null),
+                    'pendingDrugStockRequest' => $stockRequest->where('status','pending')->where('drug_stock_id','!=' , null),
 
-                    'approvedLabStock' => $labStock->where('status','approved'),
+                    'approvedLabStockRequest' => $stockRequest->where('status','approved')->where('lab_stock_id','!=' , null),
+                    'pendingLabStockRequest' => $stockRequest->where('status','pending')->where('lab_stock_id','!=' , null),
+
+                    'approvedLabStock' => $labStock->where('status', '!=','pending'),
                     'pendingLabStock' => $labStock->where('status','pending'),
 
-                    'approvedDrugStock' => $stockRequest->where('status','approved'),
-                    'pendingDrugStock' => $stockRequest->where('status','pending'),
+                    'approvedDrugStock' => $drugStock->where('status','approved'),
+                    'pendingDrugStock' => $drugStock->where('status','pending'),
+
+                    'outOfStock' => $drugStock->where('status','outOfStock'),
+                    'lowStock' => $drugStock->where('status','lowStock'),
 
 
-                    'outPatient' => $diagnosis->where('ward_status','outPatient'),
-                    'inwardPatient' => $diagnosis->where('ward_status','inPatient'),
+                    'outPatientDiagnosis' => $diagnosis->where('ward_status','outPatient'),
+                    'inwardPatientDiagnosis' => $diagnosis->where('ward_status','inPatient'),
+
+                    'outPatient' => $outPatient,
+                    'inPatient' => $inPatient,
 
                     'paidDrugSalesCount' => $drugSales->where('payment_status','paid')->count(),
                     'paidDrugSales' => $drugSales->where('payment_status','paid'),
@@ -319,6 +356,7 @@ class AdminController extends Controller
 
 
 
+
                 ];
 
 
@@ -336,7 +374,8 @@ class AdminController extends Controller
 
                 $consultation = AwaitingConsultation::with(['doctor'])->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
 
-                $stockRequest = StockRequest::with(['user'])->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
+                $stockRequest = StockRequest::with(['user','drugStock','labStock'])->get();
+                //$stockRequest = StockRequest::with(['user','drugStock','labStock'])->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
 
                 $salary = SalaryAllowances::whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
 
@@ -496,18 +535,28 @@ class AdminController extends Controller
                     'deniedLeaveApplication' => $leaveApplication->where('status', 'denied'),
                     'approvedLeaveApplication' => $leaveApplication->where('status', 'approved'),
 
-                    'approvedStockRequest' => $stockRequest->where('status','approved'),
-                    'pendingStockRequest' => $stockRequest->where('status','pending'),
+                    'approvedDrugStockRequest' => $stockRequest->where('status','approved')->where('drug_stock_id','!=' , null),
+                    'pendingDrugStockRequest' => $stockRequest->where('status','pending')->where('drug_stock_id','!=' , null),
 
-                    'approvedLabStock' => $labStock->where('status','approved'),
+                    'approvedLabStockRequest' => $stockRequest->where('status','approved')->where('lab_stock_id','!=' , null),
+                    'pendingLabStockRequest' => $stockRequest->where('status','pending')->where('lab_stock_id','!=' , null),
+
+                    'approvedLabStock' => $labStock->where('status', '!=','pending'),
                     'pendingLabStock' => $labStock->where('status','pending'),
 
-                    'approvedDrugStock' => $stockRequest->where('status','approved'),
-                    'pendingDrugStock' => $stockRequest->where('status','pending'),
+                    'outOfStock' => $drugStock->where('status','outOfStock'),
+                    'lowStock' => $drugStock->where('status','lowStock'),
 
 
-                    'outPatient' => $diagnosis->where('ward_status','outPatient'),
-                    'inwardPatient' => $diagnosis->where('ward_status','inPatient'),
+                    'approvedDrugStock' => $drugStock->where('status','approved'),
+                    'pendingDrugStock' => $drugStock->where('status','pending'),
+
+
+                    'outPatientDiagnosis' => $diagnosis->where('ward_status','outPatient'),
+                    'inwardPatientDiagnosis' => $diagnosis->where('ward_status','inPatient'),
+
+                    'outPatient' => $outPatient,
+                    'inPatient' => $inPatient,
 
                     'paidDrugSalesCount' => $drugSales->where('payment_status','paid')->count(),
                     'paidDrugSales' => $drugSales->where('payment_status','paid'),
@@ -625,27 +674,68 @@ class AdminController extends Controller
             }
     }
 
+    public function approveDrugStock (Request $request){
+
+        $req = $request->all();
+
+        try {
+
+            $pendingDrugStock = DrugStock::where('id', $req['id'])->first();
+
+            if ($pendingDrugStock->status != 'pending'){
+                return response()->json(['message'=>'DrugStock has already been Approved'],200);
+
+            }
+
+            if ($req['quantity'] == 0){
+                $req['status'] = 'outOfStock';
+            }
+            else if ($req['quantity'] <= 30){
+                $req['status'] = 'lowStock';
+            }else if ($req['quantity'] > 30){
+                $req['status'] = 'inStock';
+            }
+
+
+
+            $pendingDrugStock->update($req);
+            $pendingDrugStock->refresh();
+
+            return response()->json(['message'=>'DrugStock has been Approved','data'=> $pendingDrugStock],200);
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+    }
     public function updateDrugStock (Request $request){
 
         $req = $request->all();
 
         try {
 
-            $pendingDrugStock = DrugStock::where('id', $req['drugStock_id'])->first();
+            $pendingDrugStock = DrugStock::where('id', $req['id'])->first();
 
-            if ($pendingDrugStock->status == 'approved'){
-                return response()->json(['message'=>'DrugStock has already been Approved'],200);
-
+            if ($req['quantity'] == 0){
+               $req['status'] = 'outOfStock';
+            }
+            else if ($req['quantity'] <= 30){
+               $req['status'] = 'lowStock';
+            }else if ($req['quantity'] > 30){
+              $req['status'] = 'inStock';
             }
 
-            $pendingDrugStock->update([
+            /*$pendingDrugStock->update([
                 'amount' => $req['amount'],
                 'status' => $req['status'] ?? $pendingDrugStock->status,
                 'quantity' => $req['quantity'] ?? $pendingDrugStock->quantity,
-            ]);
+            ]);*/
+
+
+
+            $pendingDrugStock->update($req);
             $pendingDrugStock->refresh();
 
-            return response()->json(['message'=>'DrugStock has been Approved','data'=> $pendingDrugStock],200);
+            return response()->json(['message'=>'DrugStock has been Updated Successfully','data'=> $pendingDrugStock],200);
 
         }catch (Exception $exception){
             return response()->json(['message' => $exception->getMessage()]);
@@ -746,7 +836,7 @@ class AdminController extends Controller
         try {
 
             return DB::transaction(function () use($req){
-                $stockRequest = StockRequest::where('id',$req['stockRequest_id'])->lockForUpdate()->first();
+                $stockRequest = StockRequest::where('id',$req['id'])->lockForUpdate()->first();
 
                 if (!$stockRequest ){
                     return response()->json(['message'=>'No Request Found'],200);
@@ -782,8 +872,21 @@ class AdminController extends Controller
                 }elseif ($stockRequest->drug_stock_id){
                     $pendingDrugStock = DrugStock::where('id', $stockRequest->drug_stock_id)->lockForUpdate()->first();
 
+
+
+                    if ($pendingDrugStock->quantity + $newQuantity == 0){
+                        $req['status'] = 'outOfStock';
+                    }
+                    else if ($pendingDrugStock->quantity + $newQuantity <= 30){
+                        $req['status'] = 'lowStock';
+                    }else if ($pendingDrugStock->quantity + $newQuantity > 30){
+                        $req['status'] = 'inStock';
+                    }
+
                     $pendingDrugStock->update([
-                        'quantity' => $pendingDrugStock->quantity + $newQuantity
+                        'quantity' => $pendingDrugStock->quantity + $newQuantity,
+                        'status' => $req['status'],
+                        'amount' => $req['drug_stock']['amount']
                     ]);
 
                     $pendingDrugStock->refresh();
@@ -803,7 +906,7 @@ class AdminController extends Controller
         }
     }
 
-    /*todo userManagemaent, delete, suspend user*/
+    /*todo modify the update user to check the userrole and update accordingly, same as with delete*/
 
     public function updateUser (Request $request){
 
@@ -811,16 +914,115 @@ class AdminController extends Controller
 
             try {
 
-                $editUser = User::where('id', $req['user_id'])->first();
+                $editUser = User::with(['doctor','nurse','clerk','accountant','labScientist','pharmasist','patient'])->where('id', $req['user_id'])->first();
 
                 if (!$editUser){
                     return response()->json(['message'=>'No user record Found'],400);
                 }
 
-                $editUser->update($req);
-                $editUser->refresh();
+                if ($editUser){
 
-                return response()->json(['message'=>'User Updated Successfully','data'=> $editUser],200);
+                    switch ($editUser['user_role']){
+                        case 'doctor':
+                            $editUser->doctor()->update($req['doctor'][0]);
+                            break;
+
+                        /*  case 'patient':
+                              $patientPayload = [
+                                  'user_id' => $user['id'],
+                                  'blood_group' => $req['blood_group'],
+                                  'genotype' => $req['genotype'],
+                                  'nos_name' => $req['nos_name'],
+                                  'nos_address' => $req['nos_address'],
+                                  'nos_phone_no' => $req['nos_phone_no'],
+                                  'insurance_id' => $req['insurance_id'],
+                              ];
+                              $attach = Patient::create($patientPayload);
+                              break;*/
+
+                        /*todo: continue to add other roles Nurses, pharmasist,labscientist,clerk,accountant*/
+                        case 'nurse':
+                            $editUser->nurse()->update($req['nurse'][0]);
+                            break;
+
+                        case 'pharmasist':
+                            $editUser->pharmasist()->update($req['pharmasist'][0]);
+                            break;
+
+                        case 'labScientist':
+                            $editUser->labScientist()->update($req['lab_scientist'][0]);
+                            break;
+
+                        case 'clerk':
+                            $editUser->clerk()->update($req['clerk'][0]);
+                            break;
+
+                        case 'accountant':
+                            $editUser->accountant()->update($req['accountant'][0]);
+                            break;
+
+                        case 'patient':
+                            $editUser->patient()->update($req['patient']);
+                            break;
+
+                        default:
+                            return response()->json(['message'=>"Failed to create role: {$editUser['user_role']} "],501);
+
+                    }
+
+
+
+                    $editUser->update($req);
+                    $editUser->refresh();
+
+                    return response()->json(['message'=>'User Updated Successfully','data'=> $editUser],200);
+
+
+
+                    //return response()->json(['message' => 'Deleted Successful '],200);
+
+                }
+                else{
+                    return response()->json(['message'=>'Invalid User TO delete'],401);
+                }
+
+
+
+
+            }catch (Exception $exception){
+                return response()->json(['message' => $exception->getMessage()]);
+            }
+    }
+    public function updateSuspension (Request $request){
+
+            $req = $request->all();
+
+            try {
+
+                $editUser = User::with(['doctor','nurse','clerk','accountant','labScientist','pharmasist'])->where('id', $req['user_id'])->first();
+
+                if (!$editUser){
+                    return response()->json(['message'=>'No user record Found'],400);
+                }
+
+                if ($editUser){
+
+                    $editUser->update($req);
+                    $editUser->refresh();
+
+                    return response()->json(['message'=>'User Updated Successfully','data'=> $editUser],200);
+
+
+
+                    //return response()->json(['message' => 'Deleted Successful '],200);
+
+                }
+                else{
+                    return response()->json(['message'=>'Invalid User TO delete'],401);
+                }
+
+
+
 
             }catch (Exception $exception){
                 return response()->json(['message' => $exception->getMessage()]);
@@ -839,10 +1041,69 @@ class AdminController extends Controller
             if (!$editUser){
                 return response()->json(['message'=>'No user record Found'],400);
             }
+            if ($editUser){
 
-            $editUser->delete();
+                switch ($editUser['user_role']){
+                    case 'doctor':
+                       $editUser->doctor()->delete();
+                        break;
 
-            return response()->json(['message'=>'User record has been deleted successfully'],200);
+                  /*  case 'patient':
+                        $patientPayload = [
+                            'user_id' => $user['id'],
+                            'blood_group' => $req['blood_group'],
+                            'genotype' => $req['genotype'],
+                            'nos_name' => $req['nos_name'],
+                            'nos_address' => $req['nos_address'],
+                            'nos_phone_no' => $req['nos_phone_no'],
+                            'insurance_id' => $req['insurance_id'],
+                        ];
+                        $attach = Patient::create($patientPayload);
+                        break;*/
+
+                    /*todo: continue to add other roles Nurses, pharmasist,labscientist,clerk,accountant*/
+                    case 'nurse':
+                        $editUser->nurse()->delete();
+                        break;
+
+                    case 'pharmasist':
+                        $editUser->pharmasist()->delete();
+                        break;
+
+                    case 'labScientist':
+                        $editUser->labScientist()->delete();
+                        break;
+
+                    case 'clerk':
+                        $editUser->clerk()->delete();
+                        break;
+
+                    case 'patient':
+                        $editUser->patient()->delete();
+                        break;
+
+
+
+
+                    default:
+                        return response()->json(['message'=>"Failed to create role: {$editUser['user_role']} "],501);
+
+                }
+
+                $editUser->delete();
+
+                return response()->json(['message'=>'User record has been deleted successfully'],200);
+
+
+
+                //return response()->json(['message' => 'Deleted Successful '],200);
+
+            }
+            else{
+                return response()->json(['message'=>'Invalid User TO delete'],401);
+            }
+
+
 
         }catch (Exception $exception){
             return response()->json(['message' => $exception->getMessage()]);

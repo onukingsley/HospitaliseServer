@@ -14,10 +14,10 @@ return new class extends Migration
         Schema::create('sales', function (Blueprint $table) {
             $table->id();
             $table->foreignId('diagnosis_id')->nullable()->constrained();
-            $table->foreignId('pharmasist_id')->nullable()->constrained();
-            $table->foreignId('doctor_id')->nullable()->constrained();
+            $table->foreignId('pharmasist_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('doctor_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('diagnosis_report_id')->nullable()->constrained();
-            $table->foreignId('patient_id')->nullable()->constrained();
+            $table->foreignId('patient_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('payment_id')->nullable()->constrained();
             $table->string('total_amount');
             $table->string('payment_status')->default('unpaid'); //paid unpaid

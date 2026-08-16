@@ -165,7 +165,7 @@ class DatabaseSeeder extends Seeder
         foreach ($nurseUserIds as $userId) {
             $nurses[] = [
                 'user_id' => $userId,
-                'licence_id' => 'NUR' . str_pad(rand(1, 999), 3, '0', STR_PAD_LEFT),
+                'license_id' => 'NUR' . str_pad(rand(1, 999), 3, '0', STR_PAD_LEFT),
                 'level' => $levels[array_rand($levels)],
                 'leave_days' => (string) rand(10, 25),
                 'department' => $departments[array_rand($departments)],

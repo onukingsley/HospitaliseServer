@@ -17,15 +17,15 @@ return new class extends Migration
             $table->foreignId('diagnosis_id')->nullable()->constrained();
             $table->string('lab_test_name');
             $table->string('lab_test_description');
-            $table->foreignId('patient_id')->constrained();
-            $table->foreignId('doctor_id')->nullable()->constrained();
+            $table->foreignId('patient_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('doctor_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('payment_id')->nullable()->constrained();
             $table->string('lab_test_amount');
-            $table->longText('lab_test_result')->nullable();
+            $table->text('lab_test_result')->nullable();
             $table->string('lab_test_result_image')->nullable();
             $table->string('lab_test_payment_status')->default('unpaid');
             $table->string('lab_test_progress_status')->default('undone'); //undone, pending, completed
-            $table->foreignId('lab_scientist_id')->nullable()->constrained();
+            $table->foreignId('lab_scientist_id')->nullable()->constrained()->nullOnDelete();
             $table->timestamps();
         });
     }

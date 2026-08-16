@@ -16,9 +16,9 @@ return new class extends Migration
             $table->string('title');
             $table->string('description')->nullable();
             $table->string('payment_type'); //drugRestock,labRestock etc
-            $table->foreignId('rates_id')->nullable()->constrained();
-            $table->foreignId('patient_user_id')->nullable()->constrained('users')->onDelete('restrict');
-            $table->foreignId('signed_accountant_id')->nullable()->constrained('users')->onDelete('restrict');
+            $table->foreignId('rates_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('patient_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('signed_accountant_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('invoice_id');
             $table->string('amount');
             $table->string('status'); //debit or credit

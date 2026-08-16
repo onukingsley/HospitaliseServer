@@ -32,7 +32,7 @@ class PharmasistController extends Controller
             $myRestockRequest  = StockRequest::with(['drugStock','user'])->where('drug_stock_id','!=' ,null)->where('user_id', $request->user()->id)->get();
             $restockRequest  = StockRequest::with(['drugStock','user'])->where('drug_stock_id','!=' ,null)->get();
             $pendingRestock  = StockRequest::with(['drugStock','user'])->where('drug_stock_id','!=' ,null)->where('status','pending')->get();
-            $lowStock  = $drugStock->where('quantity', '<' , 5)->where('quantity', '>' , 0);
+            $lowStock  = $drugStock->where('quantity', '<' , 30)->where('quantity', '>' , 0);
             $pendingRequest  = $drugStock->where('status', 'pending');
             $outOfStock  = $drugStock->where('quantity', '=' , 0);
             $totalRevenue = $pharmasist->sales()->whereMonth('created_at',now()->month)->sum('total_amount');
@@ -203,7 +203,16 @@ class PharmasistController extends Controller
                             }
                             if ($oneDrugStock - $oneSingleDrug == 0){
                                 $individualDrugStock->update([
-                                    'status' => 'out_of_stock'
+                                    'status' => 'outOfStock'
+                                ]);
+                            }
+                            else if ($oneDrugStock - $oneSingleDrug <= 30){
+                                $individualDrugStock->update([
+                                    'status' => 'lowStock'
+                                ]);
+                            }else if ($oneDrugStock - $oneSingleDrug > 30){
+                                $individualDrugStock->update([
+                                    'status' => 'inStock'
                                 ]);
                             }
 
@@ -240,7 +249,16 @@ class PharmasistController extends Controller
                             }
                             if ($oneDrugStock - $oneSingleDrug == 0){
                                 $individualDrugStock->update([
-                                    'status' => 'out_of_stock'
+                                    'status' => 'outOfStock'
+                                ]);
+                            }
+                            else if ($oneDrugStock - $oneSingleDrug <= 30){
+                                $individualDrugStock->update([
+                                    'status' => 'lowStock'
+                                ]);
+                            }else if ($oneDrugStock - $oneSingleDrug > 30){
+                                $individualDrugStock->update([
+                                    'status' => 'inStock'
                                 ]);
                             }
 

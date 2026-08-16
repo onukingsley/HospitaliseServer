@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('awaiting_consultations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('patient_id')->constrained();
-            $table->foreignId('doctor_id')->nullable()->constrained();
+            $table->foreignId('patient_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('doctor_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('rates_id')->nullable()->constrained();
             $table->foreignId('payment_id')->nullable()->constrained();
             $table->foreignId('diagnosis_id')->nullable()->constrained();

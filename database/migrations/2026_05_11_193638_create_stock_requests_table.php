@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('stock_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('drug_stock_id')->nullable()->constrained();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('lab_stock_id')->nullable()->constrained();
             $table->foreignId('payment_id]')->nullable()->constrained();
             $table->string('quantity');
