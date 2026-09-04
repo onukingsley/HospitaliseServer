@@ -353,7 +353,9 @@ class LabController extends Controller
 
             $newRestockRequest = StockRequest::create($restockLabPayload);
 
-            return response()->json(['message'=>'You request has been logged successfully','data'=> $newRestockRequest],203);
+            $pendingRestockRequest = StockRequest::with(['labStock','user'])->where('id',$newRestockRequest->id)->first();
+
+            return response()->json(['message'=>'You request has been logged successfully','data'=> $pendingRestockRequest],203);
 
         }catch (Exception $exception){
             return response()->json(['message' => $exception->getMessage()]);

@@ -73,11 +73,14 @@ class ClerkController extends Controller
 
                 $consultationPayload = AwaitingConsultation::create($consultationPayload);
 
+               $consultationData = AwaitingConsultation::with(['patient.user'])->where('id', $consultationPayload->id)->first();
 
 
-                /*todo set event when a new cosultation is set*/
 
-               return response()->json(['message'=>'New Consultation has been set','data'=> $consultationPayload],200);
+
+               /*todo set event when a new cosultation is set*/
+
+               return response()->json(['message'=>'New Consultation has been set','data'=> $consultationData],200);
 
            }catch (Exception $exception){
                return response()->json(['message' => $exception->getMessage()]);
@@ -151,7 +154,8 @@ class ClerkController extends Controller
                        'email' => $req['email'],
                        'password' => Hash::make( isset($req['password']) ? $req['password'] : 'password'),
                        'user_role' => 'patient',
-                       'regID' => 'PID'.Str::random(4),
+                       //'regID' => 'PID'.Str::random(3),
+                       'regID' => 'PID'.rand(100,999),
                        'phone_no' => $req['phone_no'],
                        'address' => $req['address'],
                        'gender' => $req['gender'],

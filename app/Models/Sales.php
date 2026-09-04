@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Sales extends Model
 {
-    protected $fillable = ['diagnosis_id','altered_by_pharmasist','diagnosis_report_id','pharmasist_id','doctor_id','payment_id','patient_id','total_amount','payment_status','delivery_status'];
+    protected $fillable = ['diagnosis_id','altered_by_pharmasist','diagnosis_report_id','pharmasist_id','doctor_id','payment_id','patient_id','total_amount','payment_status','delivery_status','delivery_date'];
 
     public function drugStock(){
         return $this->belongsToMany(DrugStock::class,'drug_sales','sales_id','drug_stock_id')

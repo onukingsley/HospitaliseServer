@@ -104,10 +104,12 @@ class AdminController extends Controller
 
             $unitReport = Reports::latest()->paginate(50);
             $labStock = LabStock::all();
-            $drugStock = DrugStock::all();
-            $pendingDrugStock = $drugStock->where('status', 'pendingApproval');
 
             $hospitalRates = Rates::all();
+
+            $consultationRate = $hospitalRates->where('rate_type' , 'consultation');
+            $enrollmentRate = $hospitalRates->where('rate_type' , 'enrollment');
+            $labTestRate = $hospitalRates->where('rate_type' , 'labTest');
 
 
             if (isset($req['start_date']) && isset($req['end_date'])){
@@ -116,9 +118,23 @@ class AdminController extends Controller
                 $endDate = Carbon::parse($req['end_date'])->endOfDay();
 
 
+                $drugStock = DrugStock::with(['sales' => function($q) use($startDate,$endDate){
+                    $q->where('payment_status','paid')->whereBetween('sales.created_at',[$startDate, $endDate]);
+                }])->get();
+
+                $rankingLabTest = Rates::with(['labTests' => function($q) {
+                    $q->with(['payment'])->where('lab_test_payment_status','paid')->whereYear('lab_tests.created_at', now()->year)->whereMonth('lab_tests.created_at', now()->month);
+                }, ])->where('rate_type','labTest')->get();
 
 
-                $payments = Payment::whereBetween('created_at', [$startDate,$endDate])->get();
+
+
+
+                $pendingDrugStock = $drugStock->where('status', 'pendingApproval');
+
+
+
+                $payments = Payment::with(['rates','labTest','sales','consultation','salaryAllowance','signedAccountant','patientUser'])->whereBetween('created_at', [$startDate,$endDate])->get();
 
                 $drugSales = Sales::with(['pharmasist'])->whereBetween('created_at', [$startDate,$endDate])->get();
 
@@ -252,6 +268,85 @@ class AdminController extends Controller
 
 
 
+                $rankingDrugs = $drugStock;
+                /* $rankingDrugs = $drugStock->flatMap(function($drug) {
+                    return $drug->sales;
+                });*/
+                $drugSalesCount= [];
+                $drugRevenue = [];
+                $drugLeft = [];
+                $drugQuantity = [];
+
+
+                foreach ($rankingDrugs as $drug){
+                    $drugSalesCount = [...$drugSalesCount, [
+                        'name' => $drug['name'],
+                        'no_of_sales' => $drug->sales->count(),
+
+                    ]];
+                }
+                foreach ($rankingDrugs as $drug){
+                    $drugRevenue = [...$drugRevenue, [
+                        'name' => $drug['name'],
+                        /*'revenue' => $drug->sales[0]->pivot->sum(function ($sale){
+                            return $sale->unit_price * $sale->quantity;
+                        }),*/
+                        'revenue' => $drug->sales->sum(function ($sale){
+                            return $sale->pivot->unit_Price * $sale->pivot->quantity;
+                        })
+
+                    ]];
+                }
+                foreach ($rankingDrugs as $drug){
+                    $drugLeft = [...$drugLeft, [
+                        'name' => $drug['name'],
+                        'stock' => $drug->quantity,
+
+                    ]];
+                }
+                foreach ($rankingDrugs as $drug){
+                    $drugQuantity = [...$drugQuantity, [
+                        'name' => $drug['name'],
+                        'quantity_sold' => $drug->sales->sum('pivot.quantity'),
+                    ]];
+                }
+
+                $drugSalesCollection = collect($drugSalesCount);
+                $drugRevenueCollection = collect($drugRevenue);
+                $drugLeftCollection = collect($drugLeft);
+                $drugQuantityCollection = collect($drugQuantity);
+
+                $sortedNumberOfSales = $drugSalesCollection->sortByDesc('value')->take(5);
+                $sortedRevenue = $drugRevenueCollection->sortByDesc('revenue')->take(5);
+                $sortedLeft = $drugLeftCollection->sortBy('stock')->take(5);
+                $sortedQuantity = $drugQuantityCollection->sortByDesc('quantity_sold')->take(5);
+
+
+
+
+                $labTestCount = [];
+                $labTestRevenue = [];
+
+                return response($rankingLabTest);
+
+                foreach ($rankingLabTest as $test){
+
+                    $labTestCount = [...$labTestCount, [
+                        'name'=> $test['title'],
+                        'no_of_test' => count($test?->labTests) > 0 ? $test?->labTests[0]?->count() : 0
+                    ]];
+                }
+
+                foreach ($rankingLabTest as $test){
+                    $labTestRevenue = [...$labTestRevenue, [
+                        'name'=> $test['title'],
+                        'revenue' =>count($test?->labTests) > 0 ?  $test?->labTests[0]?->sum('lab_test_amount') : 0
+                        /*'no_of_test' =>count($test?->labTests) ?  $test?->labTests[0]?->payment?->sum('amount') : 0*/
+                    ]];
+                }
+
+
+
 
 
                 $data = [
@@ -277,6 +372,9 @@ class AdminController extends Controller
                     'salary' => $salary,
                     'unitReport' => $unitReport,
                     'hospitalRates' => $hospitalRates,
+                    'consultationRates' => $consultationRate,
+                    'enrollmentRates' => $enrollmentRate,
+                    'labRates' => $labTestRate,
                     'revenue' => $revenue,
                     'expenses' => $expenses,
                     'totalRevenue' => $totalRevenue,
@@ -355,6 +453,13 @@ class AdminController extends Controller
                     'totalAccountant' => $totalAccountant,
 
 
+                    'drugSalesChart' => $sortedNumberOfSales,
+                    'drugRevenueChart' => $sortedRevenue,
+                    'drugRemainingChart' => $sortedLeft,
+                    'drugQuantitySoldChart' => $sortedQuantity,
+
+                    'labTestCount'=> $labTestCount,
+                    'labTestRevenue'=> $labTestRevenue
 
 
                 ];
@@ -366,7 +471,19 @@ class AdminController extends Controller
 
             }else{
 
-                $payments = Payment::whereYear('created_at', now()->year)->whereMonth('created_at',now()->month)->get();
+                $drugStock = DrugStock::with(['sales' => function($q) {
+                    $q->where('payment_status','paid')->whereYear('sales.created_at', now()->year)->whereMonth('sales.created_at', now()->month);
+                }])->get();
+
+                $rankingLabTest = Rates::with(['labTests' => function($q) {
+                    $q->with(['payment'])->where('lab_test_payment_status','paid')->whereYear('lab_tests.created_at', now()->year)->whereMonth('lab_tests.created_at', now()->month);
+                }, ])->where('rate_type','labTest')->get();
+
+
+                $pendingDrugStock = $drugStock->where('status', 'pendingApproval');
+
+
+                $payments = Payment::with(['rates','labTest','sales','consultation','salaryAllowance','signedAccountant','patientUser'])->whereYear('created_at', now()->year)->whereMonth('created_at',now()->month)->get();
 
                 $drugSales = Sales::with(['pharmasist'])->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->get();
 
@@ -498,6 +615,83 @@ class AdminController extends Controller
 
 
 
+                $rankingDrugs = $drugStock;
+                /* $rankingDrugs = $drugStock->flatMap(function($drug) {
+                    return $drug->sales;
+                });*/
+                $drugSalesCount= [];
+                $drugRevenue = [];
+                $drugLeft = [];
+                $drugQuantity = [];
+
+
+                foreach ($rankingDrugs as $drug){
+                    $drugSalesCount = [...$drugSalesCount, [
+                        'name' => $drug['name'],
+                        'no_of_sales' => $drug->sales->count(),
+
+                    ]];
+                }
+                foreach ($rankingDrugs as $drug){
+                    $drugRevenue = [...$drugRevenue, [
+                        'name' => $drug['name'],
+                        /*'revenue' => $drug->sales[0]->pivot->sum(function ($sale){
+                            return $sale->unit_price * $sale->quantity;
+                        }),*/
+                        'revenue' => $drug->sales->sum(function ($sale){
+                            return $sale->pivot->unit_Price * $sale->pivot->quantity;
+                        })
+
+                    ]];
+                }
+                foreach ($rankingDrugs as $drug){
+                    $drugLeft = [...$drugLeft, [
+                        'name' => $drug['name'],
+                        'stock' => $drug->quantity,
+
+                    ]];
+                }
+                foreach ($rankingDrugs as $drug){
+                    $drugQuantity = [...$drugQuantity, [
+                        'name' => $drug['name'],
+                        'quantity_sold' => $drug->sales->sum('pivot.quantity'),
+                    ]];
+                }
+
+                $drugSalesCollection = collect($drugSalesCount);
+                $drugRevenueCollection = collect($drugRevenue);
+                $drugLeftCollection = collect($drugLeft);
+                $drugQuantityCollection = collect($drugQuantity);
+
+                $sortedNumberOfSales = $drugSalesCollection->sortByDesc('value')->take(5);
+                $sortedRevenue = $drugRevenueCollection->sortByDesc('revenue')->take(5);
+                $sortedLeft = $drugLeftCollection->sortBy('stock')->take(5);
+                $sortedQuantity = $drugQuantityCollection->sortByDesc('quantity_sold')->take(5);
+
+
+                
+                $labTestCount = [];
+                $labTestRevenue = [];
+
+                foreach ($rankingLabTest as $test){
+
+                    $labTestCount = [...$labTestCount, [
+                        'name'=> $test['title'],
+                        'no_of_test' =>  $test?->labTests?->count()
+                    ]];
+                }
+
+                foreach ($rankingLabTest as $test){
+                    $labTestRevenue = [...$labTestRevenue, [
+                        'name'=> $test['title'],
+                        'revenue' => $test->labTests->sum('lab_test_amount')
+                        /*'no_of_test' =>count($test?->labTests) ?  $test?->labTests[0]?->payment?->sum('amount') : 0*/
+                    ]];
+                }
+
+
+
+
 
                 $data = [
                     'users' => $allUsers,
@@ -522,6 +716,9 @@ class AdminController extends Controller
                     'salary' => $salary,
                     'unitReport' => $unitReport,
                     'hospitalRates' => $hospitalRates,
+                    'consultationRates' => $consultationRate,
+                    'enrollmentRates' => $enrollmentRate,
+                    'labRates' => $labTestRate,
                     'revenue' => $revenue,
                     'expenses' => $expenses,
                     'totalRevenue' => $totalRevenue,
@@ -597,6 +794,14 @@ class AdminController extends Controller
                     'totalClerk' => $totalClerk,
                     'totalPatient' => $totalPatient,
                     'totalAccountant' => $totalAccountant,
+
+                    'drugSalesChart' => $sortedNumberOfSales,
+                    'drugRevenueChart' => $sortedRevenue,
+                    'drugRemainingChart' => $sortedLeft,
+                    'drugQuantitySoldChart' => $sortedQuantity,
+
+                    'labTestCount'=> $labTestCount,
+                    'labTestRevenue'=> $labTestRevenue
 
 
                 ];
@@ -707,6 +912,39 @@ class AdminController extends Controller
             return response()->json(['message' => $exception->getMessage()]);
         }
     }
+    public function approveLabStock (Request $request){
+
+        $req = $request->all();
+
+        try {
+
+            $pendingLabStock = LabStock::where('id', $req['id'])->first();
+
+            if ($pendingLabStock->status != 'pending'){
+                return response()->json(['message'=>'DrugStock has already been Approved'],200);
+
+            }
+
+            if ($req['quantity'] == 0){
+                $req['status'] = 'outOfStock';
+            }
+            else if ($req['quantity'] <= 30){
+                $req['status'] = 'lowStock';
+            }else if ($req['quantity'] > 30){
+                $req['status'] = 'inStock';
+            }
+
+
+
+            $pendingLabStock->update($req);
+            $pendingLabStock->refresh();
+
+            return response()->json(['message'=>'Lab Item has been Approved','data'=> $pendingLabStock],200);
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+    }
     public function updateDrugStock (Request $request){
 
         $req = $request->all();
@@ -736,6 +974,100 @@ class AdminController extends Controller
             $pendingDrugStock->refresh();
 
             return response()->json(['message'=>'DrugStock has been Updated Successfully','data'=> $pendingDrugStock],200);
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+    }
+    public function updatePayment (Request $request){
+
+        $req = $request->all();
+
+        try {
+
+            $payment = Payment::where('id', $req['id'])->first();
+
+            if ($req['outStanding_balance'] == 0){
+               $req['completion_status'] = 'completed';
+            }
+            else if ($req['outStanding_balance'] > 0){
+                $req['completion_status'] = 'pending';
+            }
+
+
+
+
+            $payment->update($req);
+            $payment->refresh();
+
+            return response()->json(['message'=>'DrugStock has been Updated Successfully','data'=> $payment],200);
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+    }
+    public function updateRates (Request $request){
+
+        $req = $request->all();
+
+        try {
+
+            $payment = Rates::where('id', $req['id'])->first();
+
+
+            $payment->update($req);
+            $payment->refresh();
+
+            return response()->json(['message'=>'Rate has been Updated Successfully','data'=> $payment],200);
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+    }
+    public function addRate (Request $request){
+
+        $req = $request->all();
+
+        try {
+
+            $rate = Rates::create($req);
+
+
+            return response()->json(['message'=>'Rate has been created Successfully','data'=> $rate],200);
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+    }
+    public function updateLabStock (Request $request){
+
+        $req = $request->all();
+
+        try {
+
+            $pendingDrugStock = LabStock::where('id', $req['id'])->first();
+
+            if ($req['quantity'] == 0){
+               $req['status'] = 'outOfStock';
+            }
+            else if ($req['quantity'] <= 30){
+               $req['status'] = 'lowStock';
+            }else if ($req['quantity'] > 30){
+              $req['status'] = 'inStock';
+            }
+
+            /*$pendingDrugStock->update([
+                'amount' => $req['amount'],
+                'status' => $req['status'] ?? $pendingDrugStock->status,
+                'quantity' => $req['quantity'] ?? $pendingDrugStock->quantity,
+            ]);*/
+
+
+
+            $pendingDrugStock->update($req);
+            $pendingDrugStock->refresh();
+
+            return response()->json(['message'=>'Lab Item has been Updated Successfully','data'=> $pendingDrugStock],200);
 
         }catch (Exception $exception){
             return response()->json(['message' => $exception->getMessage()]);
@@ -771,8 +1103,54 @@ class AdminController extends Controller
 
 
     }
+    public function getDrugSales(Request $request){
 
-    public function updateLabStock (Request $request){
+        $req = $request->all();
+
+
+
+        try {
+           $drugStock = DrugStock::with(['sales','sales.pharmasist.user','sales.patient.user','sales.doctor.user','sales.payment','sales.drugStock'])->where('name','LIKE',"%".$req['name']."%")->get();
+
+           if (!$drugStock){
+               return response()->json(['message'=>'No drug Found'],201);
+
+           }
+
+            return response()->json(['message'=>'New Drug Request has been Fetched ','data'=> $drugStock],201);
+
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+
+
+    }
+    public function getLabTest(Request $request){
+
+        $req = $request->all();
+
+
+
+        try {
+           $labTest = Rates::with(['labTests','labTests.labScientist.user','labTests.patient.user','labTests.doctor.user','labTests.payment','labTests.rates'])->where('title','LIKE',"%".$req['name']."%")->where('rate_type','labTest')->get();
+
+           if (!$labTest){
+               return response()->json(['message'=>'No Lab Test Found'],201);
+
+           }
+
+            return response()->json(['message'=>'New Lab Test has been Fetched ','data'=> $labTest],201);
+
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+
+
+    }
+
+/*    public function updateLabStock (Request $request){
 
         $req = $request->all();
 
@@ -797,7 +1175,7 @@ class AdminController extends Controller
         }catch (Exception $exception){
             return response()->json(['message' => $exception->getMessage()]);
         }
-    }
+    }*/
 
     public function addAdminLabStock(Request $request){
 
@@ -859,8 +1237,19 @@ class AdminController extends Controller
 
                     $pendingLabStock = LabStock::where('id', $stockRequest->lab_stock_id)->lockForUpdate()->first();
 
+
+                    if ($pendingLabStock->quantity + $newQuantity == 0){
+                        $req['status'] = 'outOfStock';
+                    }
+                    else if ($pendingLabStock->quantity + $newQuantity <= 30){
+                        $req['status'] = 'lowStock';
+                    }else if ($pendingLabStock->quantity + $newQuantity > 30){
+                        $req['status'] = 'inStock';
+                    }
                     $pendingLabStock->update([
-                        'quantity' => $pendingLabStock->quantity + $newQuantity
+                        'quantity' => $pendingLabStock->quantity + $newQuantity,
+                        'status' => $req['status'],
+                        'amount' => $req['lab_stock']['amount']
                     ]);
 
                     $pendingLabStock->refresh();
@@ -1140,6 +1529,29 @@ class AdminController extends Controller
             ];
 
             return response()->json(['message'=>'','data'=> $data],200);
+
+        }catch (Exception $exception){
+            return response()->json(['message' => $exception->getMessage()]);
+        }
+    }
+    public function getPayment (Request $request){
+
+        $req = $request->all();
+
+        try {
+
+
+
+            $payments = Payment::with(['rates','labTest','sales','consultation','salaryAllowance','signedAccountant','patientUser'])->whereAny(['invoice_id','id'],$req['detail'])->first();
+
+
+
+
+            $data = [
+                'payments' => $payments,
+            ];
+
+            return response()->json(['message'=>'payment fetched successfully','data'=> $data],200);
 
         }catch (Exception $exception){
             return response()->json(['message' => $exception->getMessage()]);

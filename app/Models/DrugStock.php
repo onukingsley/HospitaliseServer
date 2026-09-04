@@ -10,7 +10,7 @@ class DrugStock extends Model
 
     public function sales(){
         return $this->belongsToMany(Sales::class,'drug_sales','drug_stock_id','sales_id')
-            ->withPivot('quantity','unitPrice','dosage','status','duration','route','instruction');
+            ->withPivot('quantity','unit_Price','dosage','status','duration','route','instruction');
     }
 
     public function category(){

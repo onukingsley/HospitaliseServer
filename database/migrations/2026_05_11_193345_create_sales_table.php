@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('payment_status')->default('unpaid'); //paid unpaid
             $table->string('altered_by_pharmasist')->default('0'); //paid unpaid
             $table->string('delivery_status')->default('unissued'); //issued unissued
+            $table->timestamp('delivery_date')->nullable();
             $table->timestamps();
         });
     }

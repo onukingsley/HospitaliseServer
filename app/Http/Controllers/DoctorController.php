@@ -296,7 +296,7 @@ class DoctorController extends Controller
                          'lab_test' => $labtest ?? null,
                          'sales' => $drugSales ?? null,
                          'consultation' => $consultation?? null,
-                         'full-diagnosis' => $diagnosisOverview
+                         'fullDiagnosis' => $diagnosisOverview
                      ]
                  ], 201);
             });
@@ -471,10 +471,10 @@ class DoctorController extends Controller
                }
 
                $diagnosis->refresh();
-               $fullDiagnosis = Diagnosis::with(['patient','doctor.user','sales.drugStock','labTest.rates','consultation.doctor.user','diagnosisReport'])->where('id',$req['diagnosis_id'])->first();
+               $fullDiagnosis = Diagnosis::with(['patient.user','doctor.user','sales.drugStock','labTest.rates','consultation.doctor.user','diagnosisReport'])->where('id',$req['diagnosis_id'])->first();
 
 
-               return response()->json(['message'=>'data updated Successfully', 'data'=>$responseData,'full_diagnosis'=>$fullDiagnosis], 200);
+               return response()->json(['message'=>'data updated Successfully', 'data'=>$responseData,'fullDiagnosis'=>$fullDiagnosis], 200);
 
            }) ;
         }catch (Exception $exception){
@@ -534,7 +534,7 @@ class DoctorController extends Controller
 
 
                 /* Note: The payload has to send prescription as true or false*/
-                if (isset($req['prescription'])){
+                if (($req['prescription'])){
                     $salesPayload = [
                         'diagnosis_id' => $req['diagnosis_id'],
                         'total_amount' => $req['drug_amount'],
@@ -573,7 +573,7 @@ class DoctorController extends Controller
                     'success' => true,
                     'message' => 'Diagnosis created successfully',
                     'data' => [
-                        'overallDiagnosis'=> $diagnosisOverview,
+                        'fullDiagnosis'=> $diagnosisOverview,
                         'diagnosisReport' => $diagnosisReport,
                         'lab_test' => $labtest ?? null,
                         'sales' => $drugSales ?? null,

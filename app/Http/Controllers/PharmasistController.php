@@ -26,18 +26,19 @@ class PharmasistController extends Controller
                 ->where('user_id',$request->user()->id)->first();
 
             $drugStock = DrugStock::all();
-            $allDrugSale = Sales::with(['drugStock','patient.user','pharmasist.user','doctor.user','payment'])->whereDay('created_at',now()->day)->get();
+            $allDrugSale = Sales::with(['drugStock','patient.user','pharmasist.user','doctor.user','payment'])->get();
+            $dailyDrugSale = Sales::with(['drugStock','patient.user','pharmasist.user','doctor.user','payment'])->whereDate('delivery_date',today())->get();
 
             $unitReport  = Reports::where('unit','pharmasist')->get();
             $myRestockRequest  = StockRequest::with(['drugStock','user'])->where('drug_stock_id','!=' ,null)->where('user_id', $request->user()->id)->get();
             $restockRequest  = StockRequest::with(['drugStock','user'])->where('drug_stock_id','!=' ,null)->get();
             $pendingRestock  = StockRequest::with(['drugStock','user'])->where('drug_stock_id','!=' ,null)->where('status','pending')->get();
             $lowStock  = $drugStock->where('quantity', '<' , 30)->where('quantity', '>' , 0);
-            $pendingRequest  = $drugStock->where('status', 'pending');
+            $pendingRequest  = $drugStock->where('status', 'pendingApproval');
             $outOfStock  = $drugStock->where('quantity', '=' , 0);
             $totalRevenue = $pharmasist->sales()->whereMonth('created_at',now()->month)->sum('total_amount');
 
-            return response()->json(['data' => ['pharmasist' => $pharmasist, 'allDrugSale' => $allDrugSale, 'myDrugRequest' => $myRestockRequest, 'pendingRestockRequest' => $pendingRestock, 'totalRevenue' => $totalRevenue, 'restockRequest' => $restockRequest, 'pendingRequest' => $pendingRequest, 'outOfStock' => $outOfStock, 'lowStock' => $lowStock,'unitReport' => $unitReport,'drugStock'=>$drugStock],'message'=>'User has been fetched successfully']);
+            return response()->json(['data' => ['pharmasist' => $pharmasist, 'allDrugSale' => $allDrugSale, 'myDrugRequest' => $myRestockRequest, 'pendingRestockRequest' => $pendingRestock, 'dailyDrugSales'=> $dailyDrugSale, 'totalRevenue' => $totalRevenue, 'restockRequest' => $restockRequest, 'pendingRequest' => $pendingRequest, 'outOfStock' => $outOfStock, 'lowStock' => $lowStock,'unitReport' => $unitReport,'drugStock'=>$drugStock],'message'=>'User has been fetched successfully']);
 
 
         }catch (Exception $exception){
@@ -127,7 +128,7 @@ class PharmasistController extends Controller
         try {
            return  DB::transaction(function ()use($req,$request){
 
-                    $sales = Sales::with(['drugStock','payment','patient'])->where('id',$req['sales_id'])->first();
+                    $sales = Sales::with(['drugStock','patient.user','pharmasist.user','doctor.user','payment'])->where('id',$req['sales_id'])->first();
 
 
                     //for postPaid payment
@@ -232,7 +233,8 @@ class PharmasistController extends Controller
                     }else{
                         $sales->update([
                             'pharmasist_id' => $request->user()->pharmasist[0]['id'],
-                            'delivery_status' => 'delivered'
+                            'delivery_status' => 'delivered',
+                            'delivery_date' => now()
                         ]);
                         $sales->refresh();
 
@@ -271,8 +273,12 @@ class PharmasistController extends Controller
 
                         $sales->refresh();
 
+                   $fullSales = Sales::with(['drugStock','patient.user','pharmasist.user','doctor.user','payment'])->where('id',$sales->id)->first();
 
-                        return response()->json(['message'=>'Prescription has been dispensed to the patient','data'=>['sales'=>$sales]],200);
+
+
+
+                   return response()->json(['message'=>'Prescription has been dispensed to the patient','data'=>['sales'=>$fullSales]],200);
 
                     }
 

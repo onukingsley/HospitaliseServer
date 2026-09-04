@@ -130,9 +130,12 @@ Route::post('/cancelConsultation', [ClerkController::class, 'cancelConsultation'
 
 /*admin endpoint*/
 Route::get('/getAdminOverview', [AdminController::class, 'getAdminOverView'])->middleware('auth:sanctum');
+Route::get('/getDrugSales', [AdminController::class, 'getDrugSales'])->middleware('auth:sanctum');
+Route::get('/getLabTest', [AdminController::class, 'getLabTest'])->middleware('auth:sanctum');
 Route::get('/getAdminPatientByRegNo', [AdminController::class, 'getAdminPatientByRegNo'])->middleware('auth:sanctum');
 Route::get('/getAdminPeriodicalPayment', [AdminController::class, 'getPeriodicalPayment'])->middleware('auth:sanctum');
 Route::get('/getAdminPeriodicalDrugSales', [AdminController::class, 'getPeriodicalDrugSales'])->middleware('auth:sanctum');
+Route::get('/getAdminPayment', [AdminController::class, 'getPayment'])->middleware('auth:sanctum');
 Route::get('/getAdminPeriodicalLabtest', [AdminController::class, 'getPeriodicalLabtest'])->middleware('auth:sanctum');
 Route::get('/getAdminPeriodicalConsultation', [AdminController::class, 'getPeriodicalConsultation'])->middleware('auth:sanctum');
 Route::get('/getAdminPeriodicalStockRequest', [AdminController::class, 'getPeriodicalStockRequest'])->middleware('auth:sanctum');
@@ -140,7 +143,11 @@ Route::get('/getAdminPeriodicalSalary', [AdminController::class, 'getPeriodicalS
 
 Route::post('/updateLeaveApplication', [AdminController::class, 'updateLeaveApplication'])->middleware('auth:sanctum');
 Route::post('/updateDrugStock', [AdminController::class, 'updateDrugStock'])->middleware('auth:sanctum');
+Route::post('/updateAdminPayment', [AdminController::class, 'updatePayment'])->middleware('auth:sanctum');
+Route::post('/updateAdminRate', [AdminController::class, 'updateRates'])->middleware('auth:sanctum');
+Route::post('/addAdminRate', [AdminController::class, 'addRate'])->middleware('auth:sanctum');
 Route::post('/approveDrugStock', [AdminController::class, 'approveDrugStock'])->middleware('auth:sanctum');
+Route::post('/approveLabStock', [AdminController::class, 'approveLabStock'])->middleware('auth:sanctum');
 Route::post('/addAdminDrugStock', [AdminController::class, 'addAdminDrugStock'])->middleware('auth:sanctum');
 Route::post('/updateLabStock', [AdminController::class, 'updateLabStock'])->middleware('auth:sanctum');
 Route::post('/addAdminLabStock', [AdminController::class, 'addAdminLabStock'])->middleware('auth:sanctum');
